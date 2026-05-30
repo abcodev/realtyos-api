@@ -6,6 +6,5 @@ public record LoginResponse(
         String refreshToken,
         String nickname,
         String bio,
-        String userType,
-        boolean hasInterests) {
+        String userType) {
 }

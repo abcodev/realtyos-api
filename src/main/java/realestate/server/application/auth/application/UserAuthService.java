@@ -8,8 +8,6 @@ import realestate.server.application.auth.infrastructure.oauth.KakaoOAuthClient;
 import realestate.server.application.auth.interfaces.dto.*;
 import realestate.server.application.common.exception.BusinessException;
 import realestate.server.application.common.exception.ErrorCode;
-import realestate.server.application.common.push.repository.DeviceTokenJpaRepository;
-import realestate.server.application.interest.infrastructure.jpa.repository.UserInterestJpaRepository;
 import realestate.server.application.user.domain.User;
 import realestate.server.application.user.domain.UserHistory;
 import realestate.server.application.user.domain.UserHistoryRepository;
@@ -38,9 +36,7 @@ public class UserAuthService {
     private final AppleAuthService appleAuthService;
     private final TokenProvider tokenProvider;
     private final RefreshTokenStore refreshTokenStore;
-    private final UserInterestJpaRepository userInterestJpaRepository;
     private final LoginHistoryRepository loginHistoryRepository;
-    private final DeviceTokenJpaRepository deviceTokenJpaRepository;
 
     private static final long REFRESH_TOKEN_TTL_SECONDS = 60L * 60 * 24 * 14; // 14일
 
@@ -86,7 +82,6 @@ public class UserAuthService {
         String userTypeName = user.userType() != null ? user.userType().name() : UserType.GENERAL.name();
         AuthToken authToken = tokenProvider.createToken(user.id(), userTypeName);
         refreshTokenStore.save(user.id(), authToken.refreshToken(), REFRESH_TOKEN_TTL_SECONDS);
-        boolean hasInterests = userInterestJpaRepository.existsByUserId(user.id());
         recordLoginHistory(user.id(), clientIp);
 
         return Optional.of(new LoginResponse(
@@ -95,8 +90,8 @@ public class UserAuthService {
                 authToken.refreshToken(),
                 user.nickname(),
                 user.bio(),
-                userTypeName,
-                hasInterests)
+                userTypeName
+                )
         );
     }
 
@@ -122,7 +117,6 @@ public class UserAuthService {
         String userTypeName = user.userType() != null ? user.userType().name() : UserType.GENERAL.name();
         AuthToken authToken = tokenProvider.createToken(user.id(), userTypeName);
         refreshTokenStore.save(user.id(), authToken.refreshToken(), REFRESH_TOKEN_TTL_SECONDS);
-        boolean hasInterests = userInterestJpaRepository.existsByUserId(user.id());
 
         return new LoginResponse(
                 user.id(),
@@ -130,8 +124,8 @@ public class UserAuthService {
                 authToken.refreshToken(),
                 user.nickname(),
                 user.bio(),
-                userTypeName,
-                hasInterests);
+                userTypeName
+                );
     }
 
     /**
@@ -158,9 +152,6 @@ public class UserAuthService {
         String userTypeName = user.userType() != null ? user.userType().name() : UserType.GENERAL.name();
         AuthToken newToken = tokenProvider.createToken(userId, userTypeName);
         refreshTokenStore.save(userId, newToken.refreshToken(), REFRESH_TOKEN_TTL_SECONDS);
-        boolean hasInterests = userInterestJpaRepository.existsByUserId(userId);
-
-        log.info("토큰 재발급 완료 - userId: {}", userId);
 
         return new LoginResponse(
                 user.id(),
@@ -168,8 +159,7 @@ public class UserAuthService {
                 newToken.refreshToken(),
                 user.nickname(),
                 user.bio(),
-                userTypeName,
-                hasInterests
+                userTypeName
         );
     }
 
@@ -251,10 +241,6 @@ public class UserAuthService {
                 );
         userRepository.deleteById(userId);
         
-        // 데이터 삭제
-        userInterestJpaRepository.deleteAllByUserId(userId);
-        deviceTokenJpaRepository.deleteAllByUserId(userId);
-
         refreshTokenStore.delete(userId);
         log.info("회원 탈퇴 처리 완료 - userId: {}", userId);
         return true;
