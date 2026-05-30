@@ -1,6 +1,5 @@
 package realestate.server.application.realestate.interfaces.dto;
 
-import realestate.server.application.common.util.DDayUtils;
 import realestate.server.application.realestate.domain.AptPblanc;
 import io.swagger.v3.oas.annotations.media.Schema;
 
@@ -25,9 +24,8 @@ public record AptPblancSummaryResponse(
         String subscriptionEndDate,
 
         @Schema(description = "청약홈 url")
-        String subscriptionHomeUrl,
-        @Schema(description = "D-Day")
-        int dDay) {
+        String subscriptionHomeUrl
+) {
 
     public static AptPblancSummaryResponse from(AptPblanc aptPblanc) {
         String earliestStartDate = getEarliestStartDate(aptPblanc);
@@ -40,8 +38,8 @@ public record AptPblancSummaryResponse(
                 aptPblanc.subscrptAreaCodeNm(),
                 earliestStartDate,
                 aptPblanc.rceptEndde(),
-                aptPblanc.pblancUrl(),
-                DDayUtils.calculateDDay(earliestStartDate));
+                aptPblanc.pblancUrl()
+                );
     }
 
     private static String getEarliestStartDate(AptPblanc aptPblanc) {

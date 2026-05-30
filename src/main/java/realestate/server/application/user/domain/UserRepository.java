@@ -25,8 +25,6 @@ public interface UserRepository {
 
     void updateBriefingPushTime(Long userId, String time);
 
-    List<Long> findUserIdsByBriefingPushTime(String pushTime);
-
     void updateUserType(Long userId, UserType userType);
 
     void deleteById(Long id);

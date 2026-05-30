@@ -61,27 +61,12 @@ public class UserJpaEntity extends BaseEntity {
 
     private LocalDateTime lastLoginAt;
 
-    /** 퀴즈 선호 카테고리 (japanese, science, english) */
-    @Column(name = "quiz_category", length = 30)
-    @Builder.Default
-    private String quizCategory = "english";
-
-    /** 퀴즈 선호 난이도 (STARTER, BEGINNER, INTERMEDIATE, ADVANCED) */
-    @Column(name = "quiz_difficulty", length = 30)
-    @Builder.Default
-    private String quizDifficulty = "BEGINNER";
-
     public void updateBriefingPushTime(String time) {
         this.briefingPushTime = time;
     }
 
     public void enablePush(boolean enabled) {
         this.pushEnabled = enabled ? "Y" : "N";
-    }
-
-    public void updateQuizPreference(String category, String difficulty) {
-        this.quizCategory = category;
-        this.quizDifficulty = difficulty;
     }
 
     public void updateUserType(UserType userType) {

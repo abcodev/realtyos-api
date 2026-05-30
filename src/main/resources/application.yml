@@ -1,7 +1,5 @@
 server:
   port: ${APP_PORT:18080}
-  servlet:
-    context-path: /realestate
   tomcat:
     connection-timeout: 15s
     keep-alive-timeout: 60s
@@ -10,7 +8,7 @@ spring:
   application:
     name: realestate-api
   profiles:
-    active: prod
+    active: loc
   jpa:
     hibernate:
       ddl-auto: ${SPRING_JPA_HIBERNATE_DDL_AUTO:update}

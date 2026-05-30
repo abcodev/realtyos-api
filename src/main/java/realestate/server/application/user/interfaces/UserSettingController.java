@@ -49,16 +49,4 @@ public class UserSettingController {
         return ApiResponse.empty();
     }
 
-    @PatchMapping("/briefing-push-time")
-    @Operation(summary = "브리핑 푸시 수신 시간 설정", description = "15분 단위로 브리핑 푸시 수신 시간을 설정합니다. (예: 08:00, 12:15, 16:30)")
-    public ApiResponse<Void> updateBriefingPushTime(
-            @CurrentUser Long userId,
-            @RequestBody BriefingPushTimeReqDto dto) {
-        userSettingService.updateBriefingPushTime(userId, dto.time());
-        return ApiResponse.empty();
-    }
-
-    public record BriefingPushTimeReqDto(String time) {}
-
-
 }

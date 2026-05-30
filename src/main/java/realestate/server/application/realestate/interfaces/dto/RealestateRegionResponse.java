@@ -1,6 +1,7 @@
 package realestate.server.application.realestate.interfaces.dto;
 
-public record RealEstateRegionResponse (
+public record RealestateRegionResponse(
         String bgdCode,
-        String bgdName) {
+        String bgdName
+) {
 }

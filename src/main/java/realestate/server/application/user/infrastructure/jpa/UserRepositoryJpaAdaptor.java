@@ -91,14 +91,6 @@ public class UserRepositoryJpaAdaptor implements UserRepository {
     }
 
     @Override
-    public List<Long> findUserIdsByBriefingPushTime(String pushTime) {
-        return userJpaRepository.findByPushEnabledAndBriefingPushTime("Y", pushTime)
-                .stream()
-                .map(UserJpaEntity::getId)
-                .toList();
-    }
-
-    @Override
     @Transactional
     public void deleteById(Long id) {
         userJpaRepository.deleteById(id);

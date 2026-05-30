@@ -6,6 +6,7 @@ import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
+import realestate.server.application.auth.domain.Oauth2Provider;
 
 import java.time.LocalDateTime;
 
@@ -25,7 +26,7 @@ public class UserHistoryJpaEntity {
 
     @Enumerated(EnumType.STRING)
     @Column(name = "oauth2_provider")
-    private realestate.server.application.auth.domain.Oauth2Provider oauth2Provider;
+    private Oauth2Provider oauth2Provider;
 
     @Column(name = "provider_id", length = 100)
     private String providerId;

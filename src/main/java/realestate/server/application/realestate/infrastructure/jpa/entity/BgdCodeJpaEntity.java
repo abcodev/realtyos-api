@@ -14,7 +14,7 @@ import lombok.NoArgsConstructor;
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 @AllArgsConstructor
 @Getter
-@Table(name = "real_estate_bgd_code")
+@Table(name = "bgd_code")
 public class BgdCodeJpaEntity extends BaseEntity {
 
     @Id
