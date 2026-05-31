@@ -29,10 +29,6 @@ public class ApiResponse<T> {
         return of(data);
     }
 
-    public static ApiResponse<Void> success() {
-        return empty();
-    }
-
     public static ApiResponse<Void> error(String code, String message) {
         return new ApiResponse<>(false, null, message, code);
     }

@@ -6,6 +6,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 import realestate.server.application.rag.domain.EmbeddingClient;
+import realestate.server.application.rag.domain.EmbeddingModelProfile;
 import realestate.server.application.rag.domain.RagDocumentRepository;
 import realestate.server.application.rag.domain.RagSearchResult;
 
@@ -21,18 +22,21 @@ public class RagSearchService {
     private static final int MAX_TOP_K = 20;
 
     private final RagDocumentRepository ragDocumentRepository;
-    private final EmbeddingClient embeddingClient;
+    private final EmbeddingClientRegistry embeddingClientRegistry;
 
-    public List<RagSearchResult> search(String query, Integer topK) {
+    public List<RagSearchResult> search(String query, Integer topK, String provider, String model) {
         if (!StringUtils.hasText(query)) {
             throw new IllegalArgumentException("검색어는 비어 있을 수 없습니다.");
         }
 
         int normalizedTopK = normalizeTopK(topK);
-        List<Double> queryEmbedding = embeddingClient.embed(List.of(query)).getFirst();
-        List<RagSearchResult> results = ragDocumentRepository.searchByEmbedding(queryEmbedding, normalizedTopK);
+        EmbeddingModelProfile profile = embeddingClientRegistry.resolveProfile(provider, model);
+        EmbeddingClient embeddingClient = embeddingClientRegistry.resolve(profile.provider());
+        List<Double> queryEmbedding = embeddingClient.embed(profile.model(), List.of(query)).getFirst();
+        List<RagSearchResult> results = ragDocumentRepository.searchByEmbedding(profile, queryEmbedding, normalizedTopK);
 
-        log.info("RAG search completed - query: {}, topK: {}, resultCount: {}", query, normalizedTopK, results.size());
+        log.info("RAG search completed - provider: {}, model: {}, query: {}, topK: {}, resultCount: {}",
+                profile.provider(), profile.model(), query, normalizedTopK, results.size());
         return results;
     }
 

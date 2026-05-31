@@ -3,6 +3,7 @@ package realestate.server.application.rag.infrastructure.jpa;
 import lombok.RequiredArgsConstructor;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Repository;
+import realestate.server.application.rag.domain.EmbeddingModelProfile;
 import realestate.server.application.rag.domain.RagDocumentForEmbedding;
 import realestate.server.application.rag.domain.RagDocumentRepository;
 import realestate.server.application.rag.domain.RagSearchResult;
@@ -88,7 +89,7 @@ public class RagDocumentRepositoryJpaAdaptor implements RagDocumentRepository {
     }
 
     @Override
-    public List<RagDocumentForEmbedding> findDocumentsWithoutEmbedding(int limit) {
+    public List<RagDocumentForEmbedding> findDocumentsWithoutEmbedding(EmbeddingModelProfile profile, int limit) {
         String sql = """
                 SELECT rd.id, rd.content
                 FROM rag_document rd
@@ -98,37 +99,49 @@ public class RagDocumentRepositoryJpaAdaptor implements RagDocumentRepository {
                     SELECT 1
                     FROM rag_embedding re
                     WHERE re.document_id = rd.id
+                    AND re.provider = ?
+                    AND re.model = ?
                 )
                 ORDER BY rd.id
                 """;
 
         if (limit > 0) {
             return jdbcTemplate.query(sql + " LIMIT ?", (rs, rowNum) ->
-                    new RagDocumentForEmbedding(rs.getLong("id"), rs.getString("content")), limit);
+                            new RagDocumentForEmbedding(rs.getLong("id"), rs.getString("content")),
+                    profile.provider().name(),
+                    profile.model(),
+                    limit);
         }
 
         return jdbcTemplate.query(sql, (rs, rowNum) ->
-                new RagDocumentForEmbedding(rs.getLong("id"), rs.getString("content")));
+                        new RagDocumentForEmbedding(rs.getLong("id"), rs.getString("content")),
+                profile.provider().name(),
+                profile.model());
     }
 
     @Override
-    public int saveEmbedding(Long documentId, List<Double> embedding) {
+    public int saveEmbedding(Long documentId, EmbeddingModelProfile profile, List<Double> embedding) {
         return jdbcTemplate.update("""
-                        INSERT INTO rag_embedding (document_id, embedding)
-                        VALUES (?, ?::vector)
-                        ON CONFLICT (document_id) DO NOTHING
+                        INSERT INTO rag_embedding (document_id, provider, model, dimension, embedding)
+                        VALUES (?, ?, ?, ?, ?::vector)
+                        ON CONFLICT (document_id, provider, model) DO NOTHING
                         """,
                 documentId,
+                profile.provider().name(),
+                profile.model(),
+                embedding.size(),
                 RagVectorLiteralFormatter.toVectorLiteral(embedding));
     }
 
     @Override
-    public List<RagSearchResult> searchByEmbedding(List<Double> embedding, int topK) {
+    public List<RagSearchResult> searchByEmbedding(EmbeddingModelProfile profile, List<Double> embedding, int topK) {
         String queryVector = RagVectorLiteralFormatter.toVectorLiteral(embedding);
 
         return jdbcTemplate.query("""
                         SELECT
                             rd.id AS document_id,
+                            re.provider AS embedding_provider,
+                            re.model AS embedding_model,
                             rd.title,
                             rd.content,
                             rd.apartment_name,
@@ -138,6 +151,9 @@ public class RagDocumentRepositoryJpaAdaptor implements RagDocumentRepository {
                             (re.embedding <=> ?::vector) AS distance
                         FROM rag_embedding re
                         JOIN rag_document rd ON rd.id = re.document_id
+                        WHERE re.provider = ?
+                        AND re.model = ?
+                        AND re.dimension = ?
                         ORDER BY re.embedding <=> ?::vector
                         LIMIT ?
                         """,
@@ -145,6 +161,8 @@ public class RagDocumentRepositoryJpaAdaptor implements RagDocumentRepository {
                     double distance = rs.getDouble("distance");
                     return new RagSearchResult(
                             rs.getLong("document_id"),
+                            rs.getString("embedding_provider"),
+                            rs.getString("embedding_model"),
                             rs.getString("title"),
                             rs.getString("content"),
                             rs.getString("apartment_name"),
@@ -156,6 +174,9 @@ public class RagDocumentRepositoryJpaAdaptor implements RagDocumentRepository {
                     );
                 },
                 queryVector,
+                profile.provider().name(),
+                profile.model(),
+                embedding.size(),
                 queryVector,
                 topK);
     }

@@ -5,6 +5,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import realestate.server.application.rag.domain.EmbeddingClient;
+import realestate.server.application.rag.domain.EmbeddingModelProfile;
 import realestate.server.application.rag.domain.RagDocumentForEmbedding;
 import realestate.server.application.rag.domain.RagDocumentRepository;
 import realestate.server.application.rag.domain.RagEmbeddingBuildResult;
@@ -18,20 +19,22 @@ import java.util.List;
 public class RagEmbeddingBuildService {
 
     private final RagDocumentRepository ragDocumentRepository;
-    private final EmbeddingClient embeddingClient;
+    private final EmbeddingClientRegistry embeddingClientRegistry;
 
     @Transactional
-    public RagEmbeddingBuildResult buildDocumentEmbeddings(int limit) {
-        List<RagDocumentForEmbedding> documents = ragDocumentRepository.findDocumentsWithoutEmbedding(limit);
+    public RagEmbeddingBuildResult buildDocumentEmbeddings(int limit, String provider, String model) {
+        EmbeddingModelProfile profile = embeddingClientRegistry.resolveProfile(provider, model);
+        EmbeddingClient embeddingClient = embeddingClientRegistry.resolve(profile.provider());
+        List<RagDocumentForEmbedding> documents = ragDocumentRepository.findDocumentsWithoutEmbedding(profile, limit);
         if (documents.isEmpty()) {
-            return new RagEmbeddingBuildResult(0, 0, 0);
+            return new RagEmbeddingBuildResult(profile.provider().name(), profile.model(), 0, 0, 0);
         }
 
         List<String> inputs = documents.stream()
                 .map(RagDocumentForEmbedding::content)
                 .toList();
 
-        List<List<Double>> embeddings = embeddingClient.embed(inputs);
+        List<List<Double>> embeddings = embeddingClient.embed(profile.model(), inputs);
         if (embeddings.size() != documents.size()) {
             throw new IllegalStateException("Embedding 응답 개수가 요청 문서 개수와 다릅니다.");
         }
@@ -40,7 +43,7 @@ public class RagEmbeddingBuildService {
         int failedCount = 0;
         for (int i = 0; i < documents.size(); i++) {
             try {
-                embeddedCount += ragDocumentRepository.saveEmbedding(documents.get(i).id(), embeddings.get(i));
+                embeddedCount += ragDocumentRepository.saveEmbedding(documents.get(i).id(), profile, embeddings.get(i));
             } catch (Exception e) {
                 failedCount++;
                 log.error("RAG embedding 저장 실패 - documentId: {}", documents.get(i).id(), e);
@@ -48,8 +51,8 @@ public class RagEmbeddingBuildService {
         }
 
         int skippedCount = documents.size() - embeddedCount - failedCount;
-        log.info("RAG embedding build completed - embedded: {}, skipped: {}, failed: {}, limit: {}",
-                embeddedCount, skippedCount, failedCount, limit);
-        return new RagEmbeddingBuildResult(embeddedCount, skippedCount, failedCount);
+        log.info("RAG embedding build completed - provider: {}, model: {}, embedded: {}, skipped: {}, failed: {}, limit: {}",
+                profile.provider(), profile.model(), embeddedCount, skippedCount, failedCount, limit);
+        return new RagEmbeddingBuildResult(profile.provider().name(), profile.model(), embeddedCount, skippedCount, failedCount);
     }
 }

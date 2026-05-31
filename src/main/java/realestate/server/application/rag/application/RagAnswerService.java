@@ -24,20 +24,28 @@ public class RagAnswerService {
     private final RagSearchService searchService;
     private final AiService aiService;
 
-    public RagAnswer answer(String query, Integer topK) {
-        List<RagSearchResult> searchResults = searchService.search(query, topK);
+    public RagAnswer answer(String query, Integer topK, String embeddingProvider, String embeddingModel,
+                            String answerProvider, String answerModel) {
+        List<RagSearchResult> searchResults = searchService.search(query, topK, embeddingProvider, embeddingModel);
         if (searchResults.isEmpty()) {
             return new RagAnswer("관련 실거래가 문서를 찾지 못했습니다.", List.of());
         }
 
         String prompt = buildPrompt(query, searchResults);
-        String answer = aiService.ask(AiProvider.OPENAI, ENTITY_TYPE, prompt);
+        String answer = aiService.ask(resolveAnswerProvider(answerProvider), ENTITY_TYPE, prompt, answerModel);
         List<RagAnswerSource> sources = searchResults.stream()
                 .map(RagAnswerSource::from)
                 .toList();
 
         log.info("RAG answer completed - query: {}, sourceCount: {}", query, sources.size());
         return new RagAnswer(answer, sources);
+    }
+
+    private AiProvider resolveAnswerProvider(String answerProvider) {
+        if (answerProvider == null || answerProvider.isBlank()) {
+            return AiProvider.OPENAI;
+        }
+        return AiProvider.valueOf(answerProvider.trim().toUpperCase());
     }
 
     private String buildPrompt(String query, List<RagSearchResult> searchResults) {

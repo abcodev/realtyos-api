@@ -9,6 +9,7 @@ import org.springframework.http.client.JdkClientHttpRequestFactory;
 import org.springframework.http.client.reactive.ReactorClientHttpConnector;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.reactive.function.client.WebClient;
+import org.springframework.web.reactive.function.client.ExchangeStrategies;
 import reactor.netty.http.client.HttpClient;
 
 import java.time.Duration;
@@ -44,8 +45,13 @@ public class RestClientConfig {
                 .option(ChannelOption.CONNECT_TIMEOUT_MILLIS, 5_000)
                 .responseTimeout(Duration.ofSeconds(30));
 
+        ExchangeStrategies exchangeStrategies = ExchangeStrategies.builder()
+                .codecs(configurer -> configurer.defaultCodecs().maxInMemorySize(10 * 1024 * 1024))
+                .build();
+
         return WebClient.builder()
                 .clientConnector(new ReactorClientHttpConnector(httpClient))
+                .exchangeStrategies(exchangeStrategies)
                 .defaultHeader(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON_VALUE)
                 .defaultHeader(HttpHeaders.ACCEPT, MediaType.APPLICATION_JSON_VALUE)
                 .build();

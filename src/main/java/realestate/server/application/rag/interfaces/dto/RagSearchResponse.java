@@ -4,6 +4,8 @@ import realestate.server.application.rag.domain.RagSearchResult;
 
 public record RagSearchResponse(
         Long documentId,
+        String embeddingProvider,
+        String embeddingModel,
         String title,
         String content,
         String apartmentName,
@@ -16,6 +18,8 @@ public record RagSearchResponse(
     public static RagSearchResponse from(RagSearchResult result) {
         return new RagSearchResponse(
                 result.documentId(),
+                result.embeddingProvider(),
+                result.embeddingModel(),
                 result.title(),
                 result.content(),
                 result.apartmentName(),

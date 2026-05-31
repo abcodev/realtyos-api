@@ -9,5 +9,8 @@ public enum AiProvider {
     OPENAI,
 
     /** Google Gemini */
-    GEMINI
+    GEMINI,
+
+    /** Ollama local models */
+    OLLAMA
 }

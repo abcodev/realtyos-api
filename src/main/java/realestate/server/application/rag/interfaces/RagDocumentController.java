@@ -30,9 +30,12 @@ public class RagDocumentController {
     }
 
     @PostMapping("/embeddings")
-    @Operation(summary = "RAG 문서 임베딩 생성", description = "아직 embedding이 없는 rag_document 문서를 OpenAI embedding으로 변환해 rag_embedding에 저장합니다. limit이 0 이하이면 전체를 처리합니다.")
+    @Operation(summary = "RAG 문서 임베딩 생성", description = "아직 embedding이 없는 rag_document 문서를 선택한 provider/model embedding으로 변환해 rag_embedding에 저장합니다. limit이 0 이하이면 전체를 처리합니다.")
     public ApiResponse<RagEmbeddingBuildResponse> buildDocumentEmbeddings(
-            @RequestParam(defaultValue = "100") int limit) {
-        return ApiResponse.success(RagEmbeddingBuildResponse.from(embeddingBuildService.buildDocumentEmbeddings(limit)));
+            @RequestParam(defaultValue = "100") int limit,
+            @RequestParam(required = false) String provider,
+            @RequestParam(required = false) String model) {
+        return ApiResponse.success(RagEmbeddingBuildResponse.from(
+                embeddingBuildService.buildDocumentEmbeddings(limit, provider, model)));
     }
 }

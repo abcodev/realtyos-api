@@ -26,7 +26,11 @@ public class RagSearchController {
     @PostMapping("/search")
     @Operation(summary = "RAG 문서 유사도 검색", description = "질문을 embedding으로 변환한 뒤 pgvector cosine distance 기준으로 가까운 RAG 문서를 조회합니다.")
     public ApiResponse<List<RagSearchResponse>> search(@RequestBody @Valid RagSearchRequest request) {
-        return ApiResponse.success(searchService.search(request.query(), request.topK()).stream()
+        return ApiResponse.success(searchService.search(
+                        request.query(),
+                        request.topK(),
+                        request.embeddingProvider(),
+                        request.embeddingModel()).stream()
                 .map(RagSearchResponse::from)
                 .toList());
     }

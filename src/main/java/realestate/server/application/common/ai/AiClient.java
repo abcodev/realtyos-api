@@ -18,6 +18,10 @@ public interface AiClient {
      */
     String chat(AiPromptTemplateJpaEntity template, String userMessage);
 
+    default String chat(AiPromptTemplateJpaEntity template, String userMessage, String model) {
+        return chat(template, userMessage);
+    }
+
     /**
      * 이 클라이언트의 AI 공급자를 반환합니다.
      *

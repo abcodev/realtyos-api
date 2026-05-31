@@ -39,11 +39,18 @@ public class GeminiClient implements AiClient {
 
     @Override
     public String chat(AiPromptTemplateJpaEntity template, String userMessage) {
+        return chat(template, userMessage, null);
+    }
+
+    @Override
+    public String chat(AiPromptTemplateJpaEntity template, String userMessage, String modelOverride) {
         try {
             String actualUserMessage = applyUserPromptTemplate(template, userMessage);
             ObjectNode requestBody = buildRequestBody(template, actualUserMessage);
 
-            String model = template.getModel() != null ? template.getModel() : DEFAULT_MODEL;
+            String model = modelOverride != null && !modelOverride.isBlank()
+                    ? modelOverride
+                    : template.getModel() != null ? template.getModel() : DEFAULT_MODEL;
             String url = String.format(BASE_URL_TEMPLATE, model) + "?key=" + aiConfig.getGemini().getKey();
 
             log.info("[Gemini] 시스템 프롬프트: {}",

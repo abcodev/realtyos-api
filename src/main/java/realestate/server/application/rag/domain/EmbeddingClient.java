@@ -4,5 +4,9 @@ import java.util.List;
 
 public interface EmbeddingClient {
 
-    List<List<Double>> embed(List<String> inputs);
+    EmbeddingProvider provider();
+
+    String defaultModel();
+
+    List<List<Double>> embed(String model, List<String> inputs);
 }

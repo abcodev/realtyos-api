@@ -2,6 +2,8 @@ package realestate.server.application.rag.domain;
 
 public record RagSearchResult(
         Long documentId,
+        String embeddingProvider,
+        String embeddingModel,
         String title,
         String content,
         String apartmentName,

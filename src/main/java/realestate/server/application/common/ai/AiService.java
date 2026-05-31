@@ -46,12 +46,16 @@ public class AiService {
      * @return AI 응답 텍스트
      */
     public String ask(AiProvider provider, String entityType, String userMessage) {
+        return ask(provider, entityType, userMessage, null);
+    }
+
+    public String ask(AiProvider provider, String entityType, String userMessage, String model) {
         AiPromptTemplateJpaEntity template = promptTemplateRepository
                 .findByEntityTypeAndAiProviderAndIsActiveTrue(entityType, provider.name())
                 .orElseThrow(() -> new IllegalArgumentException(
                         String.format("활성 프롬프트가 없습니다: entityType=%s, provider=%s", entityType, provider)));
 
-        return executeChat(provider, template, userMessage);
+        return executeChat(provider, template, userMessage, model);
     }
 
     /**
@@ -69,19 +73,19 @@ public class AiService {
                         "활성 프롬프트가 없습니다: entityType=" + entityType));
 
         AiProvider provider = AiProvider.valueOf(template.getAiProvider());
-        return executeChat(provider, template, userMessage);
+        return executeChat(provider, template, userMessage, null);
     }
 
-    private String executeChat(AiProvider provider, AiPromptTemplateJpaEntity template, String userMessage) {
+    private String executeChat(AiProvider provider, AiPromptTemplateJpaEntity template, String userMessage, String model) {
         AiClient client = clientMap.get(provider);
         if (client == null) {
             throw new IllegalArgumentException("지원하지 않는 AI 공급자입니다: " + provider);
         }
 
         log.info("AI 호출 - provider: {}, entityType: {}, model: {}, version: {}",
-                provider, template.getEntityType(), template.getModel(), template.getVersion());
+                provider, template.getEntityType(), model != null ? model : template.getModel(), template.getVersion());
 
-        String response = client.chat(template, userMessage);
+        String response = client.chat(template, userMessage, model);
 
         log.info("AI 응답 완료 - provider: {}, entityType: {}, 응답 길이: {}",
                 provider, template.getEntityType(), response.length());

@@ -1,4 +1,4 @@
-package realestate.server.application.rag.client.openai;
+package realestate.server.application.rag.client.ollama;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -6,11 +6,9 @@ import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatusCode;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Component;
-import org.springframework.util.StringUtils;
 import org.springframework.web.reactive.function.client.WebClient;
 import reactor.core.publisher.Mono;
 import realestate.server.application.common.ai.config.AiConfig;
@@ -18,16 +16,15 @@ import realestate.server.application.rag.domain.EmbeddingClient;
 import realestate.server.application.rag.domain.EmbeddingProvider;
 
 import java.util.ArrayList;
-import java.util.Comparator;
 import java.util.List;
 
 @Slf4j
 @Component
 @RequiredArgsConstructor
-public class OpenAiEmbeddingClient implements EmbeddingClient {
+public class OllamaEmbeddingClient implements EmbeddingClient {
 
-    private static final String EMBEDDINGS_URL = "https://api.openai.com/v1/embeddings";
-    private static final String DEFAULT_EMBEDDING_MODEL = "text-embedding-3-small";
+    private static final String EMBED_PATH = "/api/embed";
+    private static final int BATCH_SIZE = 10;
 
     private final WebClient webClient;
     private final AiConfig aiConfig;
@@ -35,12 +32,12 @@ public class OpenAiEmbeddingClient implements EmbeddingClient {
 
     @Override
     public EmbeddingProvider provider() {
-        return EmbeddingProvider.OPENAI;
+        return EmbeddingProvider.OLLAMA;
     }
 
     @Override
     public String defaultModel() {
-        return resolveEmbeddingModel();
+        return aiConfig.getOllama().getEmbeddingModel();
     }
 
     @Override
@@ -48,66 +45,52 @@ public class OpenAiEmbeddingClient implements EmbeddingClient {
         if (inputs.isEmpty()) {
             return List.of();
         }
-        if (!StringUtils.hasText(aiConfig.getOpenai().getKey())) {
-            throw new IllegalStateException("OpenAI API key가 설정되지 않았습니다. OPENAI_API_KEY 또는 ai.openai.key를 설정하세요.");
-        }
 
+        List<List<Double>> embeddings = new ArrayList<>();
+        for (int from = 0; from < inputs.size(); from += BATCH_SIZE) {
+            int to = Math.min(from + BATCH_SIZE, inputs.size());
+            embeddings.addAll(embedBatch(model, inputs.subList(from, to)));
+        }
+        return embeddings;
+    }
+
+    private List<List<Double>> embedBatch(String model, List<String> inputs) {
         try {
             ObjectNode requestBody = objectMapper.createObjectNode();
             requestBody.put("model", model);
-            requestBody.put("encoding_format", "float");
             ArrayNode inputArray = requestBody.putArray("input");
             inputs.forEach(inputArray::add);
 
             String responseBody = webClient.post()
-                    .uri(EMBEDDINGS_URL)
-                    .header(HttpHeaders.AUTHORIZATION, "Bearer " + aiConfig.getOpenai().getKey())
-                    .header(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON_VALUE)
+                    .uri(aiConfig.getOllama().getBaseUrl() + EMBED_PATH)
+                    .contentType(MediaType.APPLICATION_JSON)
                     .bodyValue(requestBody.toString())
                     .retrieve()
                     .onStatus(HttpStatusCode::isError, response -> response.bodyToMono(String.class)
                             .defaultIfEmpty("")
                             .flatMap(body -> Mono.error(new IllegalStateException(
-                                    "OpenAI embedding API error - status: %s, body: %s"
+                                    "Ollama embedding API error - status: %s, body: %s"
                                             .formatted(response.statusCode(), body)))))
                     .bodyToMono(String.class)
                     .block();
 
             return extractEmbeddings(responseBody);
         } catch (Exception e) {
-            log.error("OpenAI embedding API 호출 실패", e);
+            log.error("Ollama embedding API 호출 실패", e);
             throw new RuntimeException(e.getMessage(), e);
         }
     }
 
-    private String resolveEmbeddingModel() {
-        if (StringUtils.hasText(aiConfig.getOpenai().getEmbeddingModel())) {
-            return aiConfig.getOpenai().getEmbeddingModel();
-        }
-        return DEFAULT_EMBEDDING_MODEL;
-    }
-
     private List<List<Double>> extractEmbeddings(String responseBody) throws Exception {
-        JsonNode data = objectMapper.readTree(responseBody).path("data");
-        List<EmbeddingItem> items = new ArrayList<>();
-
-        for (JsonNode item : data) {
+        JsonNode embeddings = objectMapper.readTree(responseBody).path("embeddings");
+        List<List<Double>> result = new ArrayList<>();
+        for (JsonNode item : embeddings) {
             List<Double> embedding = new ArrayList<>();
-            for (JsonNode value : item.path("embedding")) {
+            for (JsonNode value : item) {
                 embedding.add(value.asDouble());
             }
-            items.add(new EmbeddingItem(item.path("index").asInt(), embedding));
+            result.add(embedding);
         }
-
-        return items.stream()
-                .sorted(Comparator.comparingInt(EmbeddingItem::index))
-                .map(EmbeddingItem::embedding)
-                .toList();
-    }
-
-    private record EmbeddingItem(
-            int index,
-            List<Double> embedding
-    ) {
+        return result;
     }
 }

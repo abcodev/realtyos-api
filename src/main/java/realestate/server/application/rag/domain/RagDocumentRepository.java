@@ -6,9 +6,9 @@ public interface RagDocumentRepository {
 
     int buildDealDocuments(int limit);
 
-    List<RagDocumentForEmbedding> findDocumentsWithoutEmbedding(int limit);
+    List<RagDocumentForEmbedding> findDocumentsWithoutEmbedding(EmbeddingModelProfile profile, int limit);
 
-    int saveEmbedding(Long documentId, List<Double> embedding);
+    int saveEmbedding(Long documentId, EmbeddingModelProfile profile, List<Double> embedding);
 
-    List<RagSearchResult> searchByEmbedding(List<Double> embedding, int topK);
+    List<RagSearchResult> searchByEmbedding(EmbeddingModelProfile profile, List<Double> embedding, int topK);
 }
