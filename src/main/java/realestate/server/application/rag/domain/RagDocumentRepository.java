@@ -8,7 +8,7 @@ public interface RagDocumentRepository {
 
     List<RagDocumentForEmbedding> findDocumentsWithoutEmbedding(EmbeddingModelProfile profile, int limit);
 
-    int saveEmbedding(Long documentId, EmbeddingModelProfile profile, List<Double> embedding);
+    int saveEmbeddings(EmbeddingModelProfile profile, List<RagEmbeddingToSave> embeddings);
 
     List<RagSearchResult> searchByEmbedding(
             EmbeddingModelProfile profile,

@@ -24,7 +24,6 @@ import java.util.List;
 public class OllamaEmbeddingClient implements EmbeddingClient {
 
     private static final String EMBED_PATH = "/api/embed";
-    private static final int BATCH_SIZE = 10;
 
     private final WebClient webClient;
     private final AiConfig aiConfig;
@@ -47,11 +46,16 @@ public class OllamaEmbeddingClient implements EmbeddingClient {
         }
 
         List<List<Double>> embeddings = new ArrayList<>();
-        for (int from = 0; from < inputs.size(); from += BATCH_SIZE) {
-            int to = Math.min(from + BATCH_SIZE, inputs.size());
+        int batchSize = resolveBatchSize();
+        for (int from = 0; from < inputs.size(); from += batchSize) {
+            int to = Math.min(from + batchSize, inputs.size());
             embeddings.addAll(embedBatch(model, inputs.subList(from, to)));
         }
         return embeddings;
+    }
+
+    private int resolveBatchSize() {
+        return Math.max(1, aiConfig.getOllama().getEmbeddingBatchSize());
     }
 
     private List<List<Double>> embedBatch(String model, List<String> inputs) {

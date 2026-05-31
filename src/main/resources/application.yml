@@ -54,6 +54,7 @@ ai:
     base-url: ${OLLAMA_BASE_URL:http://localhost:11434}
     chat-model: ${OLLAMA_CHAT_MODEL:llama3.2}
     embedding-model: ${OLLAMA_EMBEDDING_MODEL:nomic-embed-text}
+    embedding-batch-size: ${OLLAMA_EMBEDDING_BATCH_SIZE:10}
 
 rag:
   sync:

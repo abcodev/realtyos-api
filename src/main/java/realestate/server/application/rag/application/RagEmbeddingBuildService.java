@@ -9,6 +9,7 @@ import realestate.server.application.rag.domain.EmbeddingModelProfile;
 import realestate.server.application.rag.domain.RagDocumentForEmbedding;
 import realestate.server.application.rag.domain.RagDocumentRepository;
 import realestate.server.application.rag.domain.RagEmbeddingBuildResult;
+import realestate.server.application.rag.domain.RagEmbeddingToSave;
 
 import java.util.List;
 
@@ -39,15 +40,18 @@ public class RagEmbeddingBuildService {
             throw new IllegalStateException("Embedding 응답 개수가 요청 문서 개수와 다릅니다.");
         }
 
+        List<RagEmbeddingToSave> embeddingsToSave = java.util.stream.IntStream.range(0, documents.size())
+                .mapToObj(i -> new RagEmbeddingToSave(documents.get(i).id(), embeddings.get(i)))
+                .toList();
+
         int embeddedCount = 0;
         int failedCount = 0;
-        for (int i = 0; i < documents.size(); i++) {
-            try {
-                embeddedCount += ragDocumentRepository.saveEmbedding(documents.get(i).id(), profile, embeddings.get(i));
-            } catch (Exception e) {
-                failedCount++;
-                log.error("RAG embedding 저장 실패 - documentId: {}", documents.get(i).id(), e);
-            }
+        try {
+            embeddedCount = ragDocumentRepository.saveEmbeddings(profile, embeddingsToSave);
+        } catch (Exception e) {
+            failedCount = embeddingsToSave.size();
+            log.error("RAG embedding batch 저장 실패 - provider: {}, model: {}, count: {}",
+                    profile.provider(), profile.model(), embeddingsToSave.size(), e);
         }
 
         int skippedCount = documents.size() - embeddedCount - failedCount;

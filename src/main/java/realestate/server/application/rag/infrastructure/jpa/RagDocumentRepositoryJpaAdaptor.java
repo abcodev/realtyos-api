@@ -6,15 +6,20 @@ import org.springframework.stereotype.Repository;
 import realestate.server.application.rag.domain.EmbeddingModelProfile;
 import realestate.server.application.rag.domain.RagDocumentForEmbedding;
 import realestate.server.application.rag.domain.RagDocumentRepository;
+import realestate.server.application.rag.domain.RagEmbeddingToSave;
 import realestate.server.application.rag.domain.RagIndexStats;
 import realestate.server.application.rag.domain.RagSearchCondition;
 import realestate.server.application.rag.domain.RagSearchResult;
 
 import java.sql.Date;
+import java.sql.PreparedStatement;
+import java.sql.SQLException;
+import java.sql.Statement;
 import java.time.LocalDate;
 import java.time.YearMonth;
 import java.util.ArrayList;
 import java.util.List;
+import org.springframework.jdbc.core.BatchPreparedStatementSetter;
 
 @Repository
 @RequiredArgsConstructor
@@ -157,17 +162,40 @@ public class RagDocumentRepositoryJpaAdaptor implements RagDocumentRepository {
     }
 
     @Override
-    public int saveEmbedding(Long documentId, EmbeddingModelProfile profile, List<Double> embedding) {
-        return jdbcTemplate.update("""
+    public int saveEmbeddings(EmbeddingModelProfile profile, List<RagEmbeddingToSave> embeddings) {
+        if (embeddings.isEmpty()) {
+            return 0;
+        }
+
+        int[] updateCounts = jdbcTemplate.batchUpdate("""
                         INSERT INTO rag_embedding (document_id, provider, model, dimension, embedding)
                         VALUES (?, ?, ?, ?, ?::vector)
                         ON CONFLICT (document_id, provider, model) DO NOTHING
                         """,
-                documentId,
-                profile.provider().name(),
-                profile.model(),
-                embedding.size(),
-                RagVectorLiteralFormatter.toVectorLiteral(embedding));
+                new BatchPreparedStatementSetter() {
+                    @Override
+                    public void setValues(PreparedStatement ps, int i) throws SQLException {
+                        RagEmbeddingToSave embeddingToSave = embeddings.get(i);
+                        ps.setLong(1, embeddingToSave.documentId());
+                        ps.setString(2, profile.provider().name());
+                        ps.setString(3, profile.model());
+                        ps.setInt(4, embeddingToSave.embedding().size());
+                        ps.setString(5, RagVectorLiteralFormatter.toVectorLiteral(embeddingToSave.embedding()));
+                    }
+
+                    @Override
+                    public int getBatchSize() {
+                        return embeddings.size();
+                    }
+                });
+
+        int savedCount = 0;
+        for (int updateCount : updateCounts) {
+            if (updateCount > 0 || updateCount == Statement.SUCCESS_NO_INFO) {
+                savedCount++;
+            }
+        }
+        return savedCount;
     }
 
     @Override

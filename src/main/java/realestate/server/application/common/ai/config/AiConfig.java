@@ -38,5 +38,6 @@ public class AiConfig {
         private String baseUrl = "http://localhost:11434";
         private String chatModel = "llama3.2";
         private String embeddingModel = "nomic-embed-text";
+        private int embeddingBatchSize = 10;
     }
 }
