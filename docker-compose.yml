@@ -1,0 +1,16 @@
+services:
+  postgres:
+    image: pgvector/pgvector:pg17
+    container_name: realty-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: realtyos
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "15432:5432"
+    volumes:
+      - realty-postgres-data:/var/lib/postgresql/data
+
+volumes:
+  realty-postgres-data:
