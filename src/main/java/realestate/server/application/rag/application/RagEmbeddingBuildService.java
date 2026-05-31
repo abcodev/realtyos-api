@@ -7,7 +7,6 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
-import java.util.stream.Collectors;
 
 @Slf4j
 @Service
@@ -80,13 +79,7 @@ public class RagEmbeddingBuildService {
                         ON CONFLICT (document_id) DO NOTHING
                         """,
                 documentId,
-                toVectorLiteral(embedding));
-    }
-
-    private String toVectorLiteral(List<Double> embedding) {
-        return embedding.stream()
-                .map(String::valueOf)
-                .collect(Collectors.joining(",", "[", "]"));
+                RagVectorLiteralFormatter.toVectorLiteral(embedding));
     }
 
     private record RagDocumentForEmbedding(
