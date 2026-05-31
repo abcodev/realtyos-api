@@ -1,11 +1,13 @@
-package realtyos.server.application.rag.memory;
+package realtyos.server.application.rag.application;
 
 import lombok.RequiredArgsConstructor;
-import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import realtyos.server.application.rag.domain.RagQueryRewritePolicy;
 import realtyos.server.application.rag.domain.RagSearchCondition;
+import realtyos.server.application.rag.domain.UserAiMemory;
+import realtyos.server.application.rag.domain.UserAiMemoryEvent;
+import realtyos.server.application.rag.domain.UserAiMemoryRepository;
 
 import java.util.Comparator;
 import java.util.List;
@@ -19,8 +21,7 @@ public class UserAiMemoryService {
 
     private static final int RECENT_EVENT_AGGREGATION_SIZE = 50;
 
-    private final UserAiMemoryJpaRepository repository;
-    private final UserAiMemoryEventJpaRepository eventRepository;
+    private final UserAiMemoryRepository repository;
     private final RagQueryRewritePolicy queryRewritePolicy = new RagQueryRewritePolicy();
 
     @Transactional(readOnly = true)
@@ -28,8 +29,7 @@ public class UserAiMemoryService {
         if (userId == null) {
             return Optional.empty();
         }
-        return repository.findByUserId(userId)
-                .map(UserAiMemoryJpaEntity::toDomain);
+        return repository.findByUserId(userId);
     }
 
     public RagSearchCondition merge(Long userId, String query, RagSearchCondition condition) {
@@ -45,47 +45,39 @@ public class UserAiMemoryService {
             return;
         }
         RagSearchCondition inferredCondition = queryRewritePolicy.rewrite(query, condition).condition();
-        eventRepository.save(UserAiMemoryEventJpaEntity.create(userId, query, inferredCondition));
+        repository.saveEvent(UserAiMemoryEvent.create(userId, query, inferredCondition));
         String frequentRegion = findFrequentRegion(userId).orElse(inferredCondition.region());
-        UserAiMemoryJpaEntity entity = repository.findByUserId(userId)
-                .orElseGet(() -> UserAiMemoryJpaEntity.create(userId));
-        entity.record(query, inferredCondition, frequentRegion);
-        repository.save(entity);
+        UserAiMemory current = repository.findByUserId(userId)
+                .orElseGet(() -> UserAiMemory.empty(userId));
+        repository.save(current.record(query, inferredCondition, frequentRegion));
     }
 
     @Transactional(readOnly = true)
-    public List<UserAiMemoryEventJpaEntity> findEvents(Long userId, Integer limit) {
+    public List<UserAiMemoryEvent> findEvents(Long userId, Integer limit) {
         if (userId == null) {
             return List.of();
         }
-        return eventRepository.findByUserIdOrderByCreatedAtDesc(
-                userId,
-                PageRequest.of(0, normalizeLimit(limit))
-        );
+        return repository.findRecentEvents(userId, normalizeLimit(limit));
     }
 
     @Transactional
     public UserAiMemory updatePreference(Long userId, String preferredRegion, Long minPrice, Long maxPrice) {
-        UserAiMemoryJpaEntity entity = repository.findByUserId(userId)
-                .orElseGet(() -> UserAiMemoryJpaEntity.create(userId));
-        entity.updatePreference(preferredRegion, minPrice, maxPrice);
-        return repository.save(entity).toDomain();
+        UserAiMemory current = repository.findByUserId(userId)
+                .orElseGet(() -> UserAiMemory.empty(userId));
+        return repository.save(current.updatePreference(preferredRegion, minPrice, maxPrice));
     }
 
     @Transactional
     public void clear(Long userId) {
-        eventRepository.deleteByUserId(userId);
+        repository.deleteEventsByUserId(userId);
         repository.deleteByUserId(userId);
     }
 
     private Optional<String> findFrequentRegion(Long userId) {
-        return eventRepository.findByUserIdAndRegionIsNotNullOrderByCreatedAtDesc(
-                        userId,
-                        PageRequest.of(0, RECENT_EVENT_AGGREGATION_SIZE)
-                )
+        return repository.findRecentRegionEvents(userId, RECENT_EVENT_AGGREGATION_SIZE)
                 .stream()
                 .collect(Collectors.groupingBy(
-                        UserAiMemoryEventJpaEntity::getRegion,
+                        UserAiMemoryEvent::region,
                         Collectors.counting()
                 ))
                 .entrySet()

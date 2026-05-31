@@ -3,14 +3,12 @@ package realtyos.server.application.rag.application;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
-import realtyos.server.application.common.ai.AiProvider;
-import realtyos.server.application.common.ai.AiService;
+import realtyos.server.application.rag.domain.RagAiGateway;
 import realtyos.server.application.rag.domain.RagAnswer;
 import realtyos.server.application.rag.domain.RagAnswerSource;
 import realtyos.server.application.rag.domain.RagSearchCondition;
 import realtyos.server.application.rag.domain.RagSearchResult;
-import realtyos.server.application.rag.memory.UserAiMemory;
-import realtyos.server.application.rag.memory.UserAiMemoryService;
+import realtyos.server.application.rag.domain.UserAiMemory;
 
 import java.util.List;
 import java.util.Optional;
@@ -23,7 +21,7 @@ public class RagAnswerService {
     private static final String ENTITY_TYPE = "RAG_REALESTATE";
 
     private final RagSearchService searchService;
-    private final AiService aiService;
+    private final RagAiGateway aiGateway;
     private final UserAiMemoryService memoryService;
     private final RagAnswerPromptBuilder promptBuilder;
 
@@ -45,7 +43,7 @@ public class RagAnswerService {
         }
 
         String prompt = promptBuilder.build(query, searchResults, memory.map(UserAiMemory::toPromptContext).orElse(null));
-        String answer = aiService.askRouted(ENTITY_TYPE, prompt, resolveAnswerProvider(answerProvider), answerModel);
+        String answer = aiGateway.askRouted(ENTITY_TYPE, prompt, answerProvider, answerModel);
         List<RagAnswerSource> sources = searchResults.stream()
                 .map(RagAnswerSource::from)
                 .toList();
@@ -53,13 +51,6 @@ public class RagAnswerService {
         memoryService.record(userId, query, personalizedCondition);
         log.info("RAG answer completed - query: {}, sourceCount: {}", query, sources.size());
         return new RagAnswer(answer, sources);
-    }
-
-    private AiProvider resolveAnswerProvider(String answerProvider) {
-        if (answerProvider == null || answerProvider.isBlank()) {
-            return null;
-        }
-        return AiProvider.valueOf(answerProvider.trim().toUpperCase());
     }
 
 }

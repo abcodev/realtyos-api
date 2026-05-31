@@ -1,6 +1,4 @@
-package realtyos.server.application.rag.memory;
-
-import realtyos.server.application.rag.domain.RagSearchCondition;
+package realtyos.server.application.rag.domain;
 
 public record UserAiMemory(
         Long userId,
@@ -11,6 +9,10 @@ public record UserAiMemory(
         long queryCount,
         String lastQuery
 ) {
+
+    public static UserAiMemory empty(Long userId) {
+        return new UserAiMemory(userId, null, null, null, null, 0, null);
+    }
 
     public RagSearchCondition mergeInto(RagSearchCondition condition) {
         RagSearchCondition base = condition == null
@@ -29,6 +31,55 @@ public record UserAiMemory(
                 base.minArea(),
                 base.maxArea(),
                 base.recentFirst()
+        );
+    }
+
+    public UserAiMemory record(String query, RagSearchCondition condition, String frequentRegion) {
+        String nextPreferredRegion = preferredRegion;
+        String nextRecentRegion = recentRegion;
+        Long nextMinPrice = minPrice;
+        Long nextMaxPrice = maxPrice;
+
+        if (hasText(frequentRegion)) {
+            nextPreferredRegion = frequentRegion;
+        }
+        if (condition != null) {
+            if (hasText(condition.region())) {
+                nextRecentRegion = condition.region();
+                if (!hasText(nextPreferredRegion)) {
+                    nextPreferredRegion = condition.region();
+                }
+            }
+            if (condition.minPrice() != null) {
+                nextMinPrice = condition.minPrice();
+            }
+            if (condition.maxPrice() != null) {
+                nextMaxPrice = condition.maxPrice();
+            }
+        }
+
+        return new UserAiMemory(
+                userId,
+                nextPreferredRegion,
+                nextRecentRegion,
+                nextMinPrice,
+                nextMaxPrice,
+                queryCount + 1,
+                query
+        );
+    }
+
+    public UserAiMemory updatePreference(String preferredRegion, Long minPrice, Long maxPrice) {
+        String nextPreferredRegion = hasText(preferredRegion) ? preferredRegion : this.preferredRegion;
+        String nextRecentRegion = hasText(preferredRegion) ? preferredRegion : this.recentRegion;
+        return new UserAiMemory(
+                userId,
+                nextPreferredRegion,
+                nextRecentRegion,
+                minPrice,
+                maxPrice,
+                queryCount,
+                lastQuery
         );
     }
 

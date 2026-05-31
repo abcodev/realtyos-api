@@ -1,4 +1,4 @@
-package realtyos.server.application.rag.memory;
+package realtyos.server.application.rag.infrastructure.jpa.entity;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -9,7 +9,7 @@ import jakarta.persistence.Table;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
-import realtyos.server.application.rag.domain.RagSearchCondition;
+import realtyos.server.application.rag.domain.UserAiMemoryEvent;
 
 import java.time.LocalDateTime;
 
@@ -44,21 +44,28 @@ public class UserAiMemoryEventJpaEntity {
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt = LocalDateTime.now();
 
-    public static UserAiMemoryEventJpaEntity create(Long userId, String query, RagSearchCondition condition) {
+    public static UserAiMemoryEventJpaEntity from(UserAiMemoryEvent event) {
         UserAiMemoryEventJpaEntity entity = new UserAiMemoryEventJpaEntity();
-        entity.userId = userId;
-        entity.query = query;
-        if (condition != null) {
-            entity.region = blankToNull(condition.region());
-            entity.apartmentName = blankToNull(condition.apartmentName());
-            entity.minPrice = condition.minPrice();
-            entity.maxPrice = condition.maxPrice();
-        }
-        entity.createdAt = LocalDateTime.now();
+        entity.userId = event.userId();
+        entity.query = event.query();
+        entity.region = event.region();
+        entity.apartmentName = event.apartmentName();
+        entity.minPrice = event.minPrice();
+        entity.maxPrice = event.maxPrice();
+        entity.createdAt = event.createdAt();
         return entity;
     }
 
-    private static String blankToNull(String value) {
-        return value == null || value.isBlank() ? null : value;
+    public UserAiMemoryEvent toDomain() {
+        return new UserAiMemoryEvent(
+                id,
+                userId,
+                query,
+                region,
+                apartmentName,
+                minPrice,
+                maxPrice,
+                createdAt
+        );
     }
 }

@@ -15,7 +15,7 @@ import realtyos.server.application.common.web.auth.CurrentUser;
 import realtyos.server.application.rag.interfaces.dto.UserAiMemoryEventResponse;
 import realtyos.server.application.rag.interfaces.dto.UserAiMemoryResponse;
 import realtyos.server.application.rag.interfaces.dto.UserAiMemoryUpdateRequest;
-import realtyos.server.application.rag.memory.UserAiMemoryService;
+import realtyos.server.application.rag.application.UserAiMemoryService;
 
 import java.util.List;
 

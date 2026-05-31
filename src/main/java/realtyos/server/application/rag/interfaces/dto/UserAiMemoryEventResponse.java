@@ -1,6 +1,6 @@
 package realtyos.server.application.rag.interfaces.dto;
 
-import realtyos.server.application.rag.memory.UserAiMemoryEventJpaEntity;
+import realtyos.server.application.rag.domain.UserAiMemoryEvent;
 
 import java.time.LocalDateTime;
 
@@ -14,15 +14,15 @@ public record UserAiMemoryEventResponse(
         LocalDateTime createdAt
 ) {
 
-    public static UserAiMemoryEventResponse from(UserAiMemoryEventJpaEntity event) {
+    public static UserAiMemoryEventResponse from(UserAiMemoryEvent event) {
         return new UserAiMemoryEventResponse(
-                event.getId(),
-                event.getQuery(),
-                event.getRegion(),
-                event.getApartmentName(),
-                event.getMinPrice(),
-                event.getMaxPrice(),
-                event.getCreatedAt()
+                event.id(),
+                event.query(),
+                event.region(),
+                event.apartmentName(),
+                event.minPrice(),
+                event.maxPrice(),
+                event.createdAt()
         );
     }
 }

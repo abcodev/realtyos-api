@@ -11,10 +11,10 @@ import org.springframework.web.bind.annotation.RestController;
 import realtyos.server.application.common.response.ApiResponse;
 import realtyos.server.application.common.web.auth.CurrentUser;
 import realtyos.server.application.rag.application.RagSearchService;
+import realtyos.server.application.rag.application.UserAiMemoryService;
 import realtyos.server.application.rag.interfaces.dto.RagSearchRequest;
 import realtyos.server.application.rag.interfaces.dto.RagSearchConditionMapper;
 import realtyos.server.application.rag.interfaces.dto.RagSearchResponse;
-import realtyos.server.application.rag.memory.UserAiMemoryService;
 
 import java.util.List;
 

@@ -1,6 +1,6 @@
 package realtyos.server.application.rag.interfaces.dto;
 
-import realtyos.server.application.rag.memory.UserAiMemory;
+import realtyos.server.application.rag.domain.UserAiMemory;
 
 public record UserAiMemoryResponse(
         String preferredRegion,

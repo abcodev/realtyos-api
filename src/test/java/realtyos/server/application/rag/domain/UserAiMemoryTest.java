@@ -1,7 +1,6 @@
-package realtyos.server.application.rag.memory;
+package realtyos.server.application.rag.domain;
 
 import org.junit.jupiter.api.Test;
-import realtyos.server.application.rag.domain.RagSearchCondition;
 
 import static org.assertj.core.api.Assertions.assertThat;
 

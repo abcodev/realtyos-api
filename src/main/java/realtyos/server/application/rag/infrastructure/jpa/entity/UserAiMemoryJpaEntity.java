@@ -1,4 +1,4 @@
-package realtyos.server.application.rag.memory;
+package realtyos.server.application.rag.infrastructure.jpa.entity;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -10,7 +10,7 @@ import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import realtyos.server.application.common.entity.BaseEntity;
-import realtyos.server.application.rag.domain.RagSearchCondition;
+import realtyos.server.application.rag.domain.UserAiMemory;
 
 @Entity
 @Getter
@@ -43,46 +43,20 @@ public class UserAiMemoryJpaEntity extends BaseEntity {
     @Column(name = "last_query", columnDefinition = "TEXT")
     private String lastQuery;
 
-    public static UserAiMemoryJpaEntity create(Long userId) {
+    public static UserAiMemoryJpaEntity from(UserAiMemory memory) {
         UserAiMemoryJpaEntity entity = new UserAiMemoryJpaEntity();
-        entity.userId = userId;
-        entity.queryCount = 0L;
+        entity.userId = memory.userId();
+        entity.apply(memory);
         return entity;
     }
 
-    public void record(String query, RagSearchCondition condition, String frequentRegion) {
-        this.queryCount = this.queryCount == null ? 1L : this.queryCount + 1;
-        this.lastQuery = query;
-
-        if (condition == null) {
-            if (hasText(frequentRegion)) {
-                this.preferredRegion = frequentRegion;
-            }
-            return;
-        }
-        if (hasText(condition.region())) {
-            this.recentRegion = condition.region();
-        }
-        if (hasText(frequentRegion)) {
-            this.preferredRegion = frequentRegion;
-        } else if (hasText(condition.region())) {
-            this.preferredRegion = condition.region();
-        }
-        if (condition.minPrice() != null) {
-            this.minPrice = condition.minPrice();
-        }
-        if (condition.maxPrice() != null) {
-            this.maxPrice = condition.maxPrice();
-        }
-    }
-
-    public void updatePreference(String preferredRegion, Long minPrice, Long maxPrice) {
-        if (hasText(preferredRegion)) {
-            this.preferredRegion = preferredRegion;
-            this.recentRegion = preferredRegion;
-        }
-        this.minPrice = minPrice;
-        this.maxPrice = maxPrice;
+    public void apply(UserAiMemory memory) {
+        this.preferredRegion = memory.preferredRegion();
+        this.recentRegion = memory.recentRegion();
+        this.minPrice = memory.minPrice();
+        this.maxPrice = memory.maxPrice();
+        this.queryCount = memory.queryCount();
+        this.lastQuery = memory.lastQuery();
     }
 
     public UserAiMemory toDomain() {
@@ -95,9 +69,5 @@ public class UserAiMemoryJpaEntity extends BaseEntity {
                 queryCount == null ? 0 : queryCount,
                 lastQuery
         );
-    }
-
-    private boolean hasText(String value) {
-        return value != null && !value.isBlank();
     }
 }
