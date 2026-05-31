@@ -17,8 +17,8 @@ public class RagDocumentBuildService {
 
     @Transactional
     public RagDocumentBuildResult buildDealDocuments(int limit) {
-        int insertedCount = ragDocumentRepository.buildDealDocuments(limit);
-        log.info("RAG deal document build completed - inserted: {}, limit: {}", insertedCount, limit);
-        return new RagDocumentBuildResult(insertedCount);
+        int upsertedCount = ragDocumentRepository.buildDealDocuments(limit);
+        log.info("RAG deal document build completed - upserted: {}, limit: {}", upsertedCount, limit);
+        return new RagDocumentBuildResult(upsertedCount);
     }
 }

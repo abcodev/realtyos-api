@@ -55,6 +55,16 @@ ai:
     chat-model: ${OLLAMA_CHAT_MODEL:llama3.2}
     embedding-model: ${OLLAMA_EMBEDDING_MODEL:nomic-embed-text}
 
+rag:
+  sync:
+    enabled: ${RAG_SYNC_ENABLED:false}
+    cron: ${RAG_SYNC_CRON:0 30 4 * * ?}
+    zone: ${RAG_SYNC_ZONE:Asia/Seoul}
+    document-limit: ${RAG_SYNC_DOCUMENT_LIMIT:0}
+    embedding-limit: ${RAG_SYNC_EMBEDDING_LIMIT:1000}
+    embedding-provider: ${RAG_SYNC_EMBEDDING_PROVIDER:OLLAMA}
+    embedding-model: ${RAG_SYNC_EMBEDDING_MODEL:nomic-embed-text}
+
 
 # Firebase (Push Notification)
 firebase:
