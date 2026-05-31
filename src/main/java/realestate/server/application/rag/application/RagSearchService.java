@@ -8,6 +8,8 @@ import org.springframework.util.StringUtils;
 import realestate.server.application.rag.domain.EmbeddingClient;
 import realestate.server.application.rag.domain.EmbeddingModelProfile;
 import realestate.server.application.rag.domain.RagDocumentRepository;
+import realestate.server.application.rag.domain.RagQueryRewritePolicy;
+import realestate.server.application.rag.domain.RagQueryRewriteResult;
 import realestate.server.application.rag.domain.RagSearchCondition;
 import realestate.server.application.rag.domain.RagSearchResult;
 
@@ -24,6 +26,7 @@ public class RagSearchService {
 
     private final RagDocumentRepository ragDocumentRepository;
     private final EmbeddingClientRegistry embeddingClientRegistry;
+    private final RagQueryRewritePolicy queryRewritePolicy = new RagQueryRewritePolicy();
 
     public List<RagSearchResult> search(
             String query,
@@ -37,18 +40,20 @@ public class RagSearchService {
         }
 
         int normalizedTopK = normalizeTopK(topK);
+        RagQueryRewriteResult rewriteResult = queryRewritePolicy.rewrite(query, condition);
         EmbeddingModelProfile profile = embeddingClientRegistry.resolveProfile(provider, model);
         EmbeddingClient embeddingClient = embeddingClientRegistry.resolve(profile.provider());
-        List<Double> queryEmbedding = embeddingClient.embed(profile.model(), List.of(query)).getFirst();
+        List<Double> queryEmbedding = embeddingClient.embed(profile.model(), List.of(rewriteResult.rewrittenQuery())).getFirst();
         List<RagSearchResult> results = ragDocumentRepository.searchByEmbedding(
                 profile,
                 queryEmbedding,
                 normalizedTopK,
-                condition
+                rewriteResult.condition()
         );
 
-        log.info("RAG search completed - provider: {}, model: {}, query: {}, topK: {}, resultCount: {}",
-                profile.provider(), profile.model(), query, normalizedTopK, results.size());
+        log.info("RAG search completed - provider: {}, model: {}, query: {}, rewrittenQuery: {}, topK: {}, condition: {}, resultCount: {}",
+                profile.provider(), profile.model(), query, rewriteResult.rewrittenQuery(),
+                normalizedTopK, rewriteResult.condition(), results.size());
         return results;
     }
 
