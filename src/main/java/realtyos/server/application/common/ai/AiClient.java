@@ -2,6 +2,8 @@ package realtyos.server.application.common.ai;
 
 import realtyos.server.application.common.ai.prompt.AiPromptTemplateJpaEntity;
 
+import java.util.function.Consumer;
+
 /**
  * AI 클라이언트 공통 인터페이스.
  * <p>
@@ -20,6 +22,11 @@ public interface AiClient {
 
     default String chat(AiPromptTemplateJpaEntity template, String userMessage, String model) {
         return chat(template, userMessage);
+    }
+
+    default void streamChat(AiPromptTemplateJpaEntity template, String userMessage, String model,
+                            Consumer<String> onChunk) {
+        onChunk.accept(chat(template, userMessage, model));
     }
 
     /**

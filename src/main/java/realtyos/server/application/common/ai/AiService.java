@@ -10,6 +10,7 @@ import org.springframework.stereotype.Service;
 import java.util.List;
 import java.util.Map;
 import java.util.function.Function;
+import java.util.function.Consumer;
 import java.util.stream.Collectors;
 
 /**
@@ -78,6 +79,24 @@ public class AiService {
         }
     }
 
+    public AiRoute route(String entityType, String userMessage, AiProvider requestedProvider, String requestedModel) {
+        return modelRouter.route(entityType, userMessage, requestedProvider, requestedModel);
+    }
+
+    public void stream(AiRoute route, String entityType, String userMessage, Consumer<String> onChunk) {
+        try {
+            executeStream(route.provider(), entityType, userMessage, route.model(), onChunk);
+        } catch (RuntimeException primaryFailure) {
+            if (route.fallbackProvider() == null || route.fallbackProvider() == route.provider()) {
+                throw primaryFailure;
+            }
+            log.warn("AI primary stream route failed - entityType: {}, provider: {}, model: {}, fallbackProvider: {}, fallbackModel: {}, reason: {}",
+                    entityType, route.provider(), route.model(), route.fallbackProvider(), route.fallbackModel(),
+                    route.reason(), primaryFailure);
+            executeStream(route.fallbackProvider(), entityType, userMessage, route.fallbackModel(), onChunk);
+        }
+    }
+
     /**
      * AI 공급자를 미지정하여 질문합니다.
      * DB에서 entityType에 매핑된 활성 프롬프트의 ai_provider를 자동으로 사용합니다.
@@ -111,5 +130,23 @@ public class AiService {
                 provider, template.getEntityType(), response.length());
 
         return response;
+    }
+
+    private void executeStream(AiProvider provider, String entityType, String userMessage, String model,
+                               Consumer<String> onChunk) {
+        AiPromptTemplateJpaEntity template = promptTemplateRepository
+                .findByEntityTypeAndAiProviderAndIsActiveTrue(entityType, provider.name())
+                .orElseThrow(() -> new IllegalArgumentException(
+                        String.format("활성 프롬프트가 없습니다: entityType=%s, provider=%s", entityType, provider)));
+
+        AiClient client = clientMap.get(provider);
+        if (client == null) {
+            throw new IllegalArgumentException("지원하지 않는 AI 공급자입니다: " + provider);
+        }
+
+        log.info("AI 스트리밍 호출 - provider: {}, entityType: {}, model: {}, version: {}",
+                provider, entityType, model != null ? model : template.getModel(), template.getVersion());
+
+        client.streamChat(template, userMessage, model, onChunk);
     }
 }

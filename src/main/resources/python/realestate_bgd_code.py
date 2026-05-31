@@ -12,7 +12,7 @@ conn = psycopg2.connect(
 
 # 2. 올바른 SQL 구문 (컬럼 2개, 파라미터 2개 일치)
 sql = """
-INSERT INTO bgd_code (bgd_code, bgd_name)
+INSERT INTO real_estate_bgd_code (bgd_code, bgd_name)
 VALUES (%s, %s)
 """
 
