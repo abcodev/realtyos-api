@@ -38,7 +38,7 @@ public record UserAiMemory(
         }
         return """
                 관심 지역: %s
-                최근 반복 조회 지역: %s
+                최근 조회 지역: %s
                 선호 가격대: %s
                 누적 RAG 조회 수: %d
                 마지막 질문: %s

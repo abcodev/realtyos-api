@@ -9,7 +9,7 @@ class UserAiMemoryTest {
 
     @Test
     void fillsMissingSearchConditionFromMemory() {
-        UserAiMemory memory = new UserAiMemory(1L, "강남", null, 100000L, 150000L, 3, "강남 10억대");
+        UserAiMemory memory = new UserAiMemory(1L, "강남", "서초", 100000L, 150000L, 3, "강남 10억대");
         RagSearchCondition explicit = new RagSearchCondition(
                 null, null, null, null, null, null, null, null, null, null, null);
 

@@ -50,16 +50,23 @@ public class UserAiMemoryJpaEntity extends BaseEntity {
         return entity;
     }
 
-    public void record(String query, RagSearchCondition condition) {
+    public void record(String query, RagSearchCondition condition, String frequentRegion) {
         this.queryCount = this.queryCount == null ? 1L : this.queryCount + 1;
         this.lastQuery = query;
 
         if (condition == null) {
+            if (hasText(frequentRegion)) {
+                this.preferredRegion = frequentRegion;
+            }
             return;
         }
         if (hasText(condition.region())) {
-            this.preferredRegion = condition.region();
             this.recentRegion = condition.region();
+        }
+        if (hasText(frequentRegion)) {
+            this.preferredRegion = frequentRegion;
+        } else if (hasText(condition.region())) {
+            this.preferredRegion = condition.region();
         }
         if (condition.minPrice() != null) {
             this.minPrice = condition.minPrice();
