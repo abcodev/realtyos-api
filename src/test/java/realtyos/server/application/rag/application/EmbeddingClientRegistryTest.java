@@ -13,7 +13,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 class EmbeddingClientRegistryTest {
 
     @Test
-    void defaultEmbeddingProviderMatchesLocalRagIndex() {
+    void defaultEmbeddingProviderUsesConfiguredProvider() {
         EmbeddingClientRegistry registry = new EmbeddingClientRegistry(List.of(
                 new StubEmbeddingClient(EmbeddingProvider.OPENAI, "text-embedding-3-small"),
                 new StubEmbeddingClient(EmbeddingProvider.OLLAMA, "nomic-embed-text")
@@ -21,8 +21,8 @@ class EmbeddingClientRegistryTest {
 
         EmbeddingModelProfile profile = registry.resolveProfile(null, null);
 
-        assertThat(profile.provider()).isEqualTo(EmbeddingProvider.OLLAMA);
-        assertThat(profile.model()).isEqualTo("nomic-embed-text");
+        assertThat(profile.provider()).isEqualTo(EmbeddingProvider.OPENAI);
+        assertThat(profile.model()).isEqualTo("text-embedding-3-small");
     }
 
     private record StubEmbeddingClient(EmbeddingProvider provider, String defaultModel) implements EmbeddingClient {

@@ -43,4 +43,13 @@ class RagQueryRewritePolicyTest {
         assertThat(result.condition().minPrice()).isEqualTo(120000L);
         assertThat(result.condition().recentFirst()).isTrue();
     }
+
+    @Test
+    void convertsPyeongRangeToSquareMeterCondition() {
+        RagQueryRewriteResult result = policy.rewrite("강남 30평대 아파트 시세", null);
+
+        assertThat(result.condition().region()).isEqualTo("강남");
+        assertThat(result.condition().minArea()).isEqualTo(99.17);
+        assertThat(result.condition().maxArea()).isEqualTo(132.23);
+    }
 }

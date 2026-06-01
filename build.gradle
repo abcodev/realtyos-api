@@ -98,6 +98,18 @@ dependencies {
 
 tasks.named('test') {
 	useJUnitPlatform()
+	[
+			'rag.test.embedding-provider',
+			'rag.test.embedding-model',
+			'rag.test.document-limit',
+			'rag.test.embedding-limit',
+			'rag.test.repeat-until-complete',
+			'rag.test.max-batches'
+	].each { key ->
+		if (System.getProperty(key) != null) {
+			systemProperty key, System.getProperty(key)
+		}
+	}
 //	testLogging {
 //		showStandardStreams = true
 //	}

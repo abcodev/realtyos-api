@@ -14,8 +14,6 @@ import java.util.List;
 @RequiredArgsConstructor
 public class EmbeddingClientRegistry {
 
-    private static final EmbeddingProvider DEFAULT_PROVIDER = EmbeddingProvider.OLLAMA;
-
     private final List<EmbeddingClient> clients;
     private final AiConfig aiConfig;
 
@@ -35,7 +33,7 @@ public class EmbeddingClientRegistry {
 
     private EmbeddingProvider resolveProvider(String provider) {
         if (!StringUtils.hasText(provider)) {
-            return DEFAULT_PROVIDER;
+            return aiConfig.getEmbedding().getDefaultProvider();
         }
         EmbeddingProvider resolvedProvider = EmbeddingProvider.valueOf(provider.trim().toUpperCase());
         if (resolvedProvider == EmbeddingProvider.OPENAI && !aiConfig.getOpenai().isEmbeddingEnabled()) {

@@ -19,6 +19,7 @@ public class AiConfig {
     private OpenAi openai = new OpenAi();
     private Gemini gemini = new Gemini();
     private Ollama ollama = new Ollama();
+    private Embedding embedding = new Embedding();
     private Router router = new Router();
 
     @Getter
@@ -44,6 +45,16 @@ public class AiConfig {
         private String chatModel = "qwen3:8b";
         private String embeddingModel = "nomic-embed-text";
         private int embeddingBatchSize = 10;
+        private boolean thinkEnabled = false;
+        private int chatNumCtx = 4096;
+        private int chatNumPredict = 400;
+    }
+
+    @Getter
+    @Setter
+    public static class Embedding {
+        private realtyos.server.application.rag.domain.EmbeddingProvider defaultProvider =
+                realtyos.server.application.rag.domain.EmbeddingProvider.OPENAI;
     }
 
     @Getter

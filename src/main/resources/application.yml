@@ -4,6 +4,11 @@ server:
     connection-timeout: 15s
     keep-alive-timeout: 60s
 
+http:
+  web-client:
+    connect-timeout-ms: ${HTTP_WEB_CLIENT_CONNECT_TIMEOUT_MS:5000}
+    response-timeout-seconds: ${HTTP_WEB_CLIENT_RESPONSE_TIMEOUT_SECONDS:180}
+
 spring:
   application:
     name: realtyos-api
@@ -74,6 +79,8 @@ translation:
   provider: ${TRANSLATION_PROVIDER:GEMINI}
 
 ai:
+  embedding:
+    default-provider: ${AI_EMBEDDING_DEFAULT_PROVIDER:OPENAI}
   openai:
     key: ${OPENAI_API_KEY:}
     embedding-model: ${OPENAI_EMBEDDING_MODEL:text-embedding-3-small}
@@ -85,6 +92,9 @@ ai:
     chat-model: ${OLLAMA_CHAT_MODEL:qwen3:8b}
     embedding-model: ${OLLAMA_EMBEDDING_MODEL:nomic-embed-text}
     embedding-batch-size: ${OLLAMA_EMBEDDING_BATCH_SIZE:10}
+    think-enabled: ${OLLAMA_THINK_ENABLED:false}
+    chat-num-ctx: ${OLLAMA_CHAT_NUM_CTX:4096}
+    chat-num-predict: ${OLLAMA_CHAT_NUM_PREDICT:400}
   router:
     enabled: ${AI_ROUTER_ENABLED:true}
     local-first: ${AI_ROUTER_LOCAL_FIRST:true}
@@ -104,9 +114,9 @@ rag:
     cron: ${RAG_SYNC_CRON:0 30 4 * * ?}
     zone: ${RAG_SYNC_ZONE:Asia/Seoul}
     document-limit: ${RAG_SYNC_DOCUMENT_LIMIT:0}
-    embedding-limit: ${RAG_SYNC_EMBEDDING_LIMIT:1000}
-    embedding-provider: ${RAG_SYNC_EMBEDDING_PROVIDER:OLLAMA}
-    embedding-model: ${RAG_SYNC_EMBEDDING_MODEL:nomic-embed-text}
+    embedding-limit: ${RAG_SYNC_EMBEDDING_LIMIT:5000}
+    embedding-provider: ${RAG_SYNC_EMBEDDING_PROVIDER:OPENAI}
+    embedding-model: ${RAG_SYNC_EMBEDDING_MODEL:text-embedding-3-small}
 
 
 # Firebase (Push Notification)

@@ -23,10 +23,10 @@ public class RagSyncScheduler {
     @Value("${rag.sync.embedding-limit:1000}")
     private int embeddingLimit;
 
-    @Value("${rag.sync.embedding-provider:OLLAMA}")
+    @Value("${rag.sync.embedding-provider:OPENAI}")
     private String embeddingProvider;
 
-    @Value("${rag.sync.embedding-model:nomic-embed-text}")
+    @Value("${rag.sync.embedding-model:text-embedding-3-small}")
     private String embeddingModel;
 
     @Scheduled(cron = "${rag.sync.cron:0 30 4 * * ?}", zone = "${rag.sync.zone:Asia/Seoul}")

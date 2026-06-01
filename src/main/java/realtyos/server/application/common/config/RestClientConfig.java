@@ -1,6 +1,7 @@
 package realtyos.server.application.common.config;
 
 import io.netty.channel.ChannelOption;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpHeaders;
@@ -16,6 +17,12 @@ import java.time.Duration;
 
 @Configuration
 public class RestClientConfig {
+
+    @Value("${http.web-client.connect-timeout-ms:5000}")
+    private int webClientConnectTimeoutMillis;
+
+    @Value("${http.web-client.response-timeout-seconds:180}")
+    private int webClientResponseTimeoutSeconds;
 
     /**
      * RestClient (동기 HTTP 클라이언트)
@@ -37,13 +44,13 @@ public class RestClientConfig {
     /**
      * WebClient (비동기 HTTP 클라이언트 - AI API, 금융 API 등)
      * - Connect timeout: 5초
-     * - Response timeout: 30초 (AI API 응답 시간 고려)
+     * - Response timeout: 설정값 기반 (로컬 LLM 응답 시간 고려)
      */
     @Bean
     public WebClient webClient() {
         HttpClient httpClient = HttpClient.create()
-                .option(ChannelOption.CONNECT_TIMEOUT_MILLIS, 5_000)
-                .responseTimeout(Duration.ofSeconds(30));
+                .option(ChannelOption.CONNECT_TIMEOUT_MILLIS, webClientConnectTimeoutMillis)
+                .responseTimeout(Duration.ofSeconds(webClientResponseTimeoutSeconds));
 
         ExchangeStrategies exchangeStrategies = ExchangeStrategies.builder()
                 .codecs(configurer -> configurer.defaultCodecs().maxInMemorySize(10 * 1024 * 1024))
