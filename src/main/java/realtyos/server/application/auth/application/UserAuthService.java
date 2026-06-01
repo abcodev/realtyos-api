@@ -4,6 +4,7 @@ import realtyos.server.application.auth.domain.Oauth2Provider;
 import realtyos.server.application.auth.domain.LoginHistory;
 import realtyos.server.application.auth.domain.LoginHistoryRepository;
 import realtyos.server.application.auth.domain.RefreshTokenStore;
+import realtyos.server.application.auth.infrastructure.oauth.GoogleOAuthClient;
 import realtyos.server.application.auth.infrastructure.oauth.KakaoOAuthClient;
 import realtyos.server.application.auth.interfaces.dto.*;
 import realtyos.server.application.common.exception.BusinessException;
@@ -33,7 +34,7 @@ public class UserAuthService {
     private final UserRepository userRepository;
     private final UserHistoryRepository userHistoryRepository;
     private final KakaoOAuthClient kakaoOAuthClient;
-    private final AppleAuthService appleAuthService;
+    private final GoogleOAuthClient googleOAuthClient;
     private final TokenProvider tokenProvider;
     private final RefreshTokenStore refreshTokenStore;
     private final LoginHistoryRepository loginHistoryRepository;
@@ -41,34 +42,25 @@ public class UserAuthService {
     private static final long REFRESH_TOKEN_TTL_SECONDS = 60L * 60 * 24 * 14; // 14일
 
     private OAuthUserInfo resolveOAuthUser(
-            Oauth2Provider oauth2Provider, String accessTokenOrIdToken, String authorizationCode, String redirectUri) {
+            Oauth2Provider oauth2Provider, String accessToken, String idToken, String authorizationCode, String redirectUri) {
 
         return switch (oauth2Provider) {
             case KAKAO -> {
-                if (StringUtils.hasText(accessTokenOrIdToken)) {
-                    yield kakaoOAuthClient.getUserInfo(accessTokenOrIdToken);
+                if (StringUtils.hasText(accessToken)) {
+                    yield kakaoOAuthClient.getUserInfo(accessToken);
                 }
                 if (StringUtils.hasText(authorizationCode)) {
                     yield kakaoOAuthClient.getKakaoUserInfoByCode(authorizationCode, redirectUri);
                 }
                 throw new IllegalArgumentException("KAKAO requires accessToken or authorizationCode");
             }
-            case APPLE -> {
-                if (StringUtils.hasText(accessTokenOrIdToken)) {
-                    yield appleAuthService.parseIdTokenToUser(accessTokenOrIdToken);
-                }
-                if (StringUtils.hasText(authorizationCode)) {
-                    AppleTokenResponse tokens = appleAuthService.exchangeCodeForTokens(authorizationCode);
-                    yield appleAuthService.parseIdTokenToUser(tokens.idToken());
-                }
-                throw new IllegalArgumentException("APPLE requires id_token (in accessToken) or authorizationCode");
-            }
+            case GOOGLE -> googleOAuthClient.getUserInfo(idToken);
         };
     }
 
     public Optional<LoginResponse> login(LoginRequest request, Oauth2Provider oauth2Provider, String clientIp) {
         OAuthUserInfo userInfo =
-                resolveOAuthUser(oauth2Provider, request.accessToken(), request.authorizationCode(), request.redirectUri());
+                resolveOAuthUser(oauth2Provider, request.accessToken(), request.idToken(), request.authorizationCode(), request.redirectUri());
 
         User user = userRepository
                 .findByProviderAndProviderIdOrEmail(oauth2Provider, userInfo.providerId(), userInfo.email())
@@ -105,11 +97,9 @@ public class UserAuthService {
 
     public LoginResponse signup(UserRegisterRequest request, Oauth2Provider oauth2Provider) {
         OAuthUserInfo userInfo =
-                resolveOAuthUser(oauth2Provider, request.accessToken(), request.authorizationCode(), null);
+                resolveOAuthUser(oauth2Provider, request.accessToken(), request.idToken(), request.authorizationCode(), null);
 
-        String nickname =
-                Optional.ofNullable(request.nickname())
-                        .orElseThrow(() -> new IllegalArgumentException("닉네임은 필수 입력 값입니다."));
+        String nickname = resolveNickname(userInfo, oauth2Provider, request.nickname());
         String bio = Optional.ofNullable(request.bio()).orElse("");
 
         User user = loginOrRegister(userInfo, nickname, bio, oauth2Provider, request.pushEnabled());
@@ -195,15 +185,7 @@ public class UserAuthService {
     private User registerNewUser(OAuthUserInfo userInfo, Oauth2Provider oauth2Provider, String pushEnabled, String requestNickname) {
         log.info("신규회원 등록 {} user: {} providerId: {}", oauth2Provider.name(), userInfo.email(), userInfo.providerId());
 
-        // 카카오는 내부 프로필 이름, 애플은 프론트에서 받은 이름 사용
-        String nickname;
-        if (oauth2Provider == Oauth2Provider.KAKAO) {
-            nickname = StringUtils.hasText(userInfo.name()) ? userInfo.name() : oauth2Provider.name() + "_user";
-        } else if (oauth2Provider == Oauth2Provider.APPLE) {
-            nickname = StringUtils.hasText(requestNickname) ? requestNickname : (StringUtils.hasText(userInfo.name()) ? userInfo.name() : oauth2Provider.name() + "_user");
-        } else {
-            nickname = oauth2Provider.name() + "_user";
-        }
+        String nickname = resolveNickname(userInfo, oauth2Provider, requestNickname);
 
         boolean isPushEnabled = StringUtils.hasText(pushEnabled) && "Y".equalsIgnoreCase(pushEnabled);
 
@@ -211,6 +193,7 @@ public class UserAuthService {
                 .providerId(userInfo.providerId())
                 .oauth2Provider(oauth2Provider)
                 .email(userInfo.email())
+                .name(userInfo.name())
                 .nickname(nickname)
                 .userType(UserType.GENERAL)
                 .userLevel(UserLevel.BASIC)
@@ -225,6 +208,16 @@ public class UserAuthService {
         User savedUser = userRepository.save(newUser);
         userHistoryRepository.save(UserHistory.createNew(savedUser.id(), savedUser.oauth2Provider(), savedUser.providerId(), savedUser.createdAt()));
         return savedUser;
+    }
+
+    private String resolveNickname(OAuthUserInfo userInfo, Oauth2Provider oauth2Provider, String requestNickname) {
+        if (StringUtils.hasText(requestNickname)) {
+            return requestNickname;
+        }
+        if (StringUtils.hasText(userInfo.name())) {
+            return userInfo.name();
+        }
+        return oauth2Provider.name() + "_user";
     }
 
     @Transactional

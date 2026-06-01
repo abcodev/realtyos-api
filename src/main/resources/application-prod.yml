@@ -28,17 +28,12 @@ oauth:
   kakao:
     client-id: ${KAKAO_CLIENT_ID}
     redirect-uri: ${KAKAO_REDIRECT_URI}
+  google:
+    client-id: ${GOOGLE_CLIENT_ID:}
 
 # JWT
 jwt:
   secret: ${JWT_SECRET}
-
-# Apple Login
-apple:
-  team-id: ${APPLE_TEAM_ID}
-  client-id: ${APPLE_CLIENT_ID}
-  key-id: ${APPLE_KEY_ID}
-  private-key: ${APPLE_PRIVATE_KEY}
 
 # Google Translation
 google:

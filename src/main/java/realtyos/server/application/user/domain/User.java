@@ -106,9 +106,6 @@ public record User(
 
     @Override
     public String nickname() {
-        if (nickname != null && nickname.contains("@privaterelay.appleid.com")) {
-            return "회원";
-        }
         return nickname;
     }
 

@@ -35,6 +35,9 @@ public class UserJpaEntity extends BaseEntity {
     @Column(name = "nickname", length = 50, nullable = false)
     private String nickname;
 
+    @Column(name = "name", length = 100)
+    private String name;
+
     @Enumerated(EnumType.STRING)
     private UserType userType;
 
