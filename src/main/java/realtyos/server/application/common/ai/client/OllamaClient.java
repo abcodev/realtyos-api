@@ -8,6 +8,8 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatusCode;
 import org.springframework.http.MediaType;
+import org.springframework.core.io.buffer.DataBuffer;
+import org.springframework.core.io.buffer.DataBufferUtils;
 import org.springframework.stereotype.Component;
 import org.springframework.web.reactive.function.client.WebClient;
 import reactor.core.publisher.Mono;
@@ -16,7 +18,7 @@ import realtyos.server.application.common.ai.AiProvider;
 import realtyos.server.application.common.ai.config.AiConfig;
 import realtyos.server.application.common.ai.prompt.AiPromptTemplateJpaEntity;
 
-import java.util.Arrays;
+import java.nio.charset.StandardCharsets;
 import java.util.function.Consumer;
 
 @Component
@@ -70,6 +72,7 @@ public class OllamaClient implements AiClient {
         try {
             ObjectNode requestBody = buildRequestBody(template, applyUserPromptTemplate(template, userMessage), model, true);
 
+            StringBuilder lineBuffer = new StringBuilder();
             webClient.post()
                     .uri(chatUrl)
                     .contentType(MediaType.APPLICATION_JSON)
@@ -81,13 +84,11 @@ public class OllamaClient implements AiClient {
                             .flatMap(body -> Mono.error(new IllegalStateException(
                                     "Ollama chat stream API error - status: %s, body: %s"
                                             .formatted(response.statusCode(), body)))))
-                    .bodyToFlux(String.class)
-                    .flatMapIterable(chunk -> Arrays.asList(chunk.split("\\R")))
-                    .filter(line -> line != null && !line.isBlank())
-                    .map(this::extractStreamContent)
-                    .filter(content -> content != null && !content.isEmpty())
-                    .doOnNext(onChunk)
+                    .bodyToFlux(DataBuffer.class)
+                    .map(this::decodeAndRelease)
+                    .doOnNext(chunk -> emitCompletedStreamLines(lineBuffer, chunk, onChunk))
                     .blockLast();
+            emitStreamLine(lineBuffer.toString(), onChunk);
         } catch (Exception e) {
             log.error("Ollama 스트리밍 API 호출 실패 - url: {}, model: {}, promptLength: {}, cause: {}",
                     chatUrl, resolveModel(template, model), userMessage == null ? 0 : userMessage.length(),
@@ -160,6 +161,33 @@ public class OllamaClient implements AiClient {
         } catch (Exception e) {
             log.debug("Ollama 스트리밍 응답 조각 파싱 실패: {}", responseLine, e);
             return "";
+        }
+    }
+
+    private String decodeAndRelease(DataBuffer dataBuffer) {
+        byte[] bytes = new byte[dataBuffer.readableByteCount()];
+        dataBuffer.read(bytes);
+        DataBufferUtils.release(dataBuffer);
+        return new String(bytes, StandardCharsets.UTF_8);
+    }
+
+    private void emitCompletedStreamLines(StringBuilder lineBuffer, String chunk, Consumer<String> onChunk) {
+        lineBuffer.append(chunk);
+        int newlineIndex;
+        while ((newlineIndex = lineBuffer.indexOf("\n")) >= 0) {
+            String line = lineBuffer.substring(0, newlineIndex);
+            lineBuffer.delete(0, newlineIndex + 1);
+            emitStreamLine(line, onChunk);
+        }
+    }
+
+    private void emitStreamLine(String line, Consumer<String> onChunk) {
+        if (line == null || line.isBlank()) {
+            return;
+        }
+        String content = extractStreamContent(line.strip());
+        if (content != null && !content.isEmpty()) {
+            onChunk.accept(content);
         }
     }
 }

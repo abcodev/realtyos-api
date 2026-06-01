@@ -20,6 +20,14 @@ public class CachedBodyWrappingFilter extends OncePerRequestFilter {
 
     public static final String ATTR_START_TIME = "api.log.startTime";
     public static final String ATTR_REQUEST_ID = "api.log.requestId";
+    private static final String TEXT_EVENT_STREAM = "text/event-stream";
+
+    @Override
+    protected boolean shouldNotFilter(HttpServletRequest request) {
+        String accept = request.getHeader("Accept");
+        return request.getRequestURI().equals("/api/v1/rag/ask/stream")
+                || (accept != null && accept.contains(TEXT_EVENT_STREAM));
+    }
 
     @Override
     protected void doFilterInternal(

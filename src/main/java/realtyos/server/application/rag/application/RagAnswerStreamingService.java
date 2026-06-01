@@ -49,8 +49,12 @@ public class RagAnswerStreamingService {
 
         if (!guardrail.hasUsableEvidence(personalizedCondition, searchResults)) {
             memoryService.record(userId, query, personalizedCondition);
-            send(eventConsumer, "token", Map.of("text", guardrail.noMatchingEvidenceMessage()));
-            send(eventConsumer, "completed", Map.of("sourceCount", 0));
+            String answer = guardrail.noMatchingEvidenceMessage();
+            send(eventConsumer, "token", Map.of("text", answer));
+            send(eventConsumer, "completed", Map.of(
+                    "answer", answer,
+                    "sourceCount", 0
+            ));
             return;
         }
 
@@ -62,13 +66,18 @@ public class RagAnswerStreamingService {
                 "reason", route.reason()
         ));
 
-        aiGateway.stream(route, ENTITY_TYPE, prompt, chunk -> send(eventConsumer, "token", Map.of("text", chunk)));
+        StringBuilder answer = new StringBuilder();
+        aiGateway.stream(route, ENTITY_TYPE, prompt, chunk -> {
+            answer.append(chunk);
+            send(eventConsumer, "token", Map.of("text", chunk));
+        });
 
         List<RagAnswerSource> sources = searchResults.stream()
                 .map(RagAnswerSource::from)
                 .toList();
         memoryService.record(userId, query, personalizedCondition);
         send(eventConsumer, "completed", Map.of(
+                "answer", answer.toString(),
                 "sourceCount", sources.size(),
                 "sources", sources
         ));
