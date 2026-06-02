@@ -10,6 +10,7 @@ public record RagSearchResult(
         String region,
         String sourceType,
         Long sourceId,
+        String searchType,
         String dealDate,
         String exclusiveArea,
         Long dealAmount,

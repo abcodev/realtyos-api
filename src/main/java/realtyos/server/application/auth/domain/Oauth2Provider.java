@@ -4,7 +4,7 @@ import java.util.Arrays;
 
 public enum Oauth2Provider {
     KAKAO,
-    APPLE;
+    GOOGLE;
 
     public static Oauth2Provider from(String value) {
         return Arrays.stream(values())

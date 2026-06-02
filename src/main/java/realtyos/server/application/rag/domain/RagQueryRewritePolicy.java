@@ -1,7 +1,9 @@
 package realtyos.server.application.rag.domain;
 
 import java.time.Year;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -10,7 +12,10 @@ public class RagQueryRewritePolicy {
     private static final Pattern EOK_PRICE_PATTERN = Pattern.compile("(\\d+(?:\\.\\d+)?)\\s*억\\s*(이상|초과|부터|이하|미만|까지|대)?");
     private static final Pattern MANWON_PRICE_PATTERN = Pattern.compile("(\\d{4,})\\s*만\\s*원?\\s*(이상|초과|부터|이하|미만|까지)?");
     private static final Pattern AREA_PATTERN = Pattern.compile("(\\d+(?:\\.\\d+)?)\\s*(?:제곱|평방|㎡|m2|m\\^2)");
+    private static final Pattern PYEONG_RANGE_PATTERN = Pattern.compile("(\\d+(?:\\.\\d+)?)\\s*평\\s*대");
+    private static final Pattern PYEONG_PATTERN = Pattern.compile("(\\d+(?:\\.\\d+)?)\\s*평(?:형)?");
     private static final Pattern YEAR_MONTH_PATTERN = Pattern.compile("(20\\d{2})\\s*년(?:\\s*(\\d{1,2})\\s*월)?");
+    private static final double SQUARE_METERS_PER_PYEONG = 3.305785;
 
     private static final List<String> REGION_KEYWORDS = List.of(
             "강남구", "강남",
@@ -22,17 +27,55 @@ public class RagQueryRewritePolicy {
             "영등포구", "영등포",
             "분당구", "분당",
             "판교",
-            "잠실",
+            "잠실동", "잠실",
             "반포",
             "압구정",
-            "대치",
+            "대치동", "대치",
             "목동"
+    );
+    private static final Map<String, String> REGION_CANONICAL_NAMES = Map.ofEntries(
+            Map.entry("강남구", "강남구"),
+            Map.entry("강남", "강남구"),
+            Map.entry("서초구", "서초구"),
+            Map.entry("서초", "서초구"),
+            Map.entry("송파구", "송파구"),
+            Map.entry("송파", "송파구"),
+            Map.entry("마포구", "마포구"),
+            Map.entry("마포", "마포구"),
+            Map.entry("용산구", "용산구"),
+            Map.entry("용산", "용산구"),
+            Map.entry("성동구", "성동구"),
+            Map.entry("성동", "성동구"),
+            Map.entry("영등포구", "영등포구"),
+            Map.entry("영등포", "영등포구"),
+            Map.entry("분당구", "분당구"),
+            Map.entry("분당", "분당구"),
+            Map.entry("판교", "판교"),
+            Map.entry("잠실동", "잠실동"),
+            Map.entry("잠실", "잠실동"),
+            Map.entry("반포", "반포동"),
+            Map.entry("압구정", "압구정동"),
+            Map.entry("대치동", "대치동"),
+            Map.entry("대치", "대치동"),
+            Map.entry("목동", "목동")
     );
 
     public RagQueryRewriteResult rewrite(String query, RagSearchCondition explicitCondition) {
         RagSearchCondition inferred = infer(query);
         RagSearchCondition merged = merge(explicitCondition, inferred);
         return new RagQueryRewriteResult(rewriteQuery(query, merged), merged);
+    }
+
+    public List<String> inferComparisonRegions(String query) {
+        String text = query == null ? "" : query;
+        if (!containsAny(text, "비교", "차이", "대비", " vs ", "VS", "와", "과", "랑", "하고")) {
+            return List.of();
+        }
+        LinkedHashMap<String, String> regions = new LinkedHashMap<>();
+        REGION_KEYWORDS.stream()
+                .filter(text::contains)
+                .forEach(keyword -> regions.putIfAbsent(canonicalRegion(keyword), canonicalRegion(keyword)));
+        return regions.size() > 1 ? List.copyOf(regions.values()) : List.of();
     }
 
     private RagSearchCondition infer(String query) {
@@ -95,10 +138,17 @@ public class RagQueryRewritePolicy {
     }
 
     private String inferRegion(String text) {
-        return REGION_KEYWORDS.stream()
+        List<String> matchedRegions = REGION_KEYWORDS.stream()
                 .filter(text::contains)
-                .findFirst()
-                .orElse(null);
+                .toList();
+        if (matchedRegions.size() > 1 && containsAny(text, "비교", "차이", "대비", " vs ", "VS", "와", "과", "랑", "하고")) {
+            return null;
+        }
+        return matchedRegions.stream().findFirst().orElse(null);
+    }
+
+    private String canonicalRegion(String region) {
+        return REGION_CANONICAL_NAMES.getOrDefault(region, region);
     }
 
     private PriceRange inferPriceRange(String text) {
@@ -133,12 +183,28 @@ public class RagQueryRewritePolicy {
     }
 
     private AreaRange inferAreaRange(String text) {
+        Matcher pyeongRangeMatcher = PYEONG_RANGE_PATTERN.matcher(text);
+        if (pyeongRangeMatcher.find()) {
+            double pyeong = Double.parseDouble(pyeongRangeMatcher.group(1));
+            return new AreaRange(toSquareMeters(pyeong), toSquareMeters(pyeong + 10));
+        }
+
+        Matcher pyeongMatcher = PYEONG_PATTERN.matcher(text);
+        if (pyeongMatcher.find()) {
+            double area = toSquareMeters(Double.parseDouble(pyeongMatcher.group(1)));
+            return new AreaRange(Math.max(0, area - 6), area + 6);
+        }
+
         Matcher matcher = AREA_PATTERN.matcher(text);
         if (!matcher.find()) {
             return new AreaRange(null, null);
         }
         double area = Double.parseDouble(matcher.group(1));
         return new AreaRange(Math.max(0, area - 5), area + 5);
+    }
+
+    private double toSquareMeters(double pyeong) {
+        return Math.round(pyeong * SQUARE_METERS_PER_PYEONG * 100.0) / 100.0;
     }
 
     private YearMonthRange inferYearMonthRange(String text) {

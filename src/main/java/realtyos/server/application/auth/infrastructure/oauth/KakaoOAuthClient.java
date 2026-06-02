@@ -12,6 +12,7 @@ import org.springframework.http.MediaType;
 import org.springframework.stereotype.Component;
 import org.springframework.util.LinkedMultiValueMap;
 import org.springframework.util.MultiValueMap;
+import org.springframework.util.StringUtils;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientResponseException;
 
@@ -20,8 +21,11 @@ import org.springframework.web.client.RestClientResponseException;
 @RequiredArgsConstructor
 public class KakaoOAuthClient {
 
-    @Value("${oauth.kakao.client-id}")
+    @Value("${oauth.kakao.client-id:${spring.security.oauth2.client.registration.kakao.client-id:}}")
     private String clientId;
+
+    @Value("${oauth.kakao.redirect-uri:http://localhost:18080/login/oauth2/code/kakao}")
+    private String configuredRedirectUri;
 
     private final RestClient restClient;
 
@@ -52,7 +56,7 @@ public class KakaoOAuthClient {
 
             String email = profileResponse.kakaoAccount() != null ? profileResponse.kakaoAccount().email() : null;
             String nickname = profileResponse.kakaoAccount() != null && profileResponse.kakaoAccount().profile() != null ?
-                    profileResponse.kakaoAccount().profile().nickname() : "카카오사용자";
+                    profileResponse.kakaoAccount().profile().nickname() : null;
             String providerId = profileResponse.id() != null ? profileResponse.id().toString() : null;
 
             return new OAuthUserInfo(providerId, email, nickname);
@@ -63,10 +67,11 @@ public class KakaoOAuthClient {
     }
 
     private String getAccessToken(String authorizationCode, String redirectUri) {
+        String resolvedRedirectUri = StringUtils.hasText(redirectUri) ? redirectUri : configuredRedirectUri;
         MultiValueMap<String, String> body = new LinkedMultiValueMap<>();
         body.add("grant_type", "authorization_code");
         body.add("client_id", clientId);
-        body.add("redirect_uri", redirectUri);
+        body.add("redirect_uri", resolvedRedirectUri);
         body.add("code", authorizationCode);
 
         try {

@@ -52,12 +52,24 @@ public class OpenAiEmbeddingClient implements EmbeddingClient {
             throw new IllegalStateException("OpenAI API key가 설정되지 않았습니다. OPENAI_API_KEY 또는 ai.openai.key를 설정하세요.");
         }
 
+        List<List<Double>> embeddings = new ArrayList<>();
+        int batchSize = resolveBatchSize();
+        for (int from = 0; from < inputs.size(); from += batchSize) {
+            int to = Math.min(from + batchSize, inputs.size());
+            embeddings.addAll(embedBatch(model, inputs.subList(from, to)));
+        }
+        return embeddings;
+    }
+
+    private List<List<Double>> embedBatch(String model, List<String> inputs) {
         try {
             ObjectNode requestBody = objectMapper.createObjectNode();
             requestBody.put("model", model);
             requestBody.put("encoding_format", "float");
             ArrayNode inputArray = requestBody.putArray("input");
-            inputs.forEach(inputArray::add);
+            inputs.stream()
+                    .map(this::normalizeInput)
+                    .forEach(inputArray::add);
 
             String responseBody = webClient.post()
                     .uri(EMBEDDINGS_URL)
@@ -78,6 +90,24 @@ public class OpenAiEmbeddingClient implements EmbeddingClient {
             log.error("OpenAI embedding API 호출 실패", e);
             throw new RuntimeException(e.getMessage(), e);
         }
+    }
+
+    private int resolveBatchSize() {
+        return Math.max(1, aiConfig.getOpenai().getEmbeddingBatchSize());
+    }
+
+    private String normalizeInput(String input) {
+        if (!StringUtils.hasText(input)) {
+            return "";
+        }
+        String normalized = input
+                .replaceAll("\\s+", " ")
+                .trim();
+        int maxChars = Math.max(200, aiConfig.getOpenai().getEmbeddingMaxInputChars());
+        if (normalized.length() <= maxChars) {
+            return normalized;
+        }
+        return normalized.substring(0, maxChars);
     }
 
     private String resolveEmbeddingModel() {

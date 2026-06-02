@@ -4,11 +4,41 @@ server:
     connection-timeout: 15s
     keep-alive-timeout: 60s
 
+http:
+  web-client:
+    connect-timeout-ms: ${HTTP_WEB_CLIENT_CONNECT_TIMEOUT_MS:5000}
+    response-timeout-seconds: ${HTTP_WEB_CLIENT_RESPONSE_TIMEOUT_SECONDS:180}
+
 spring:
   application:
     name: realtyos-api
   profiles:
     active: loc
+  security:
+    oauth2:
+      client:
+        registration:
+          kakao:
+            client-id: ${KAKAO_CLIENT_ID:}
+            client-secret: ${KAKAO_CLIENT_SECRET:}
+            redirect-uri: "{baseUrl}/login/oauth2/code/kakao"
+            authorization-grant-type: authorization_code
+            client-authentication-method: client_secret_post
+          google:
+            client-id: ${GOOGLE_CLIENT_ID:}
+            client-secret: ${GOOGLE_CLIENT_SECRET:}
+            redirect-uri: "{baseUrl}/login/oauth2/code/google"
+            authorization-grant-type: authorization_code
+            scope:
+              - openid
+              - profile
+        provider:
+          kakao:
+            authorization-uri: https://kauth.kakao.com/oauth/authorize
+            token-uri: https://kauth.kakao.com/oauth/token
+            user-info-uri: https://kapi.kakao.com/v2/user/me
+            user-name-attribute: id
+
   jpa:
     hibernate:
       ddl-auto: ${SPRING_JPA_HIBERNATE_DDL_AUTO:update}
@@ -40,6 +70,8 @@ management:
     health:
       show-details: never
 
+auth:
+  frontend-redirect-url: ${AUTH_FRONTEND_REDIRECT_URL:http://localhost:5173/oauth2/callback}
 
 
 # 번역 프로바이더 선택: GOOGLE (Google Cloud Translation) 또는 GEMINI (Gemini API, 저비용)
@@ -47,14 +79,22 @@ translation:
   provider: ${TRANSLATION_PROVIDER:GEMINI}
 
 ai:
+  embedding:
+    default-provider: ${AI_EMBEDDING_DEFAULT_PROVIDER:OPENAI}
   openai:
     key: ${OPENAI_API_KEY:}
     embedding-model: ${OPENAI_EMBEDDING_MODEL:text-embedding-3-small}
+    embedding-enabled: ${OPENAI_EMBEDDING_ENABLED:true}
+    embedding-batch-size: ${OPENAI_EMBEDDING_BATCH_SIZE:50}
+    embedding-max-input-chars: ${OPENAI_EMBEDDING_MAX_INPUT_CHARS:1200}
   ollama:
     base-url: ${OLLAMA_BASE_URL:http://localhost:11434}
-    chat-model: ${OLLAMA_CHAT_MODEL:=qwen3:8b}
+    chat-model: ${OLLAMA_CHAT_MODEL:qwen3:8b}
     embedding-model: ${OLLAMA_EMBEDDING_MODEL:nomic-embed-text}
     embedding-batch-size: ${OLLAMA_EMBEDDING_BATCH_SIZE:10}
+    think-enabled: ${OLLAMA_THINK_ENABLED:false}
+    chat-num-ctx: ${OLLAMA_CHAT_NUM_CTX:4096}
+    chat-num-predict: ${OLLAMA_CHAT_NUM_PREDICT:400}
   router:
     enabled: ${AI_ROUTER_ENABLED:true}
     local-first: ${AI_ROUTER_LOCAL_FIRST:true}
@@ -62,7 +102,7 @@ ai:
     default-provider: ${AI_ROUTER_DEFAULT_PROVIDER:OPENAI}
     default-model: ${AI_ROUTER_DEFAULT_MODEL:gpt-4o-mini}
     local-provider: ${AI_ROUTER_LOCAL_PROVIDER:OLLAMA}
-    local-model: ${AI_ROUTER_LOCAL_MODEL:=qwen3:8b}
+    local-model: ${AI_ROUTER_LOCAL_MODEL:qwen3:8b}
     high-quality-provider: ${AI_ROUTER_HIGH_QUALITY_PROVIDER:OPENAI}
     high-quality-model: ${AI_ROUTER_HIGH_QUALITY_MODEL:gpt-4o-mini}
     fallback-provider: ${AI_ROUTER_FALLBACK_PROVIDER:OPENAI}
@@ -70,13 +110,13 @@ ai:
 
 rag:
   sync:
-    enabled: ${RAG_SYNC_ENABLED:false}
+    enabled: ${RAG_SYNC_ENABLED:true}
     cron: ${RAG_SYNC_CRON:0 30 4 * * ?}
     zone: ${RAG_SYNC_ZONE:Asia/Seoul}
     document-limit: ${RAG_SYNC_DOCUMENT_LIMIT:0}
-    embedding-limit: ${RAG_SYNC_EMBEDDING_LIMIT:1000}
-    embedding-provider: ${RAG_SYNC_EMBEDDING_PROVIDER:OLLAMA}
-    embedding-model: ${RAG_SYNC_EMBEDDING_MODEL:nomic-embed-text}
+    embedding-limit: ${RAG_SYNC_EMBEDDING_LIMIT:5000}
+    embedding-provider: ${RAG_SYNC_EMBEDDING_PROVIDER:OPENAI}
+    embedding-model: ${RAG_SYNC_EMBEDDING_MODEL:text-embedding-3-small}
 
 
 # Firebase (Push Notification)

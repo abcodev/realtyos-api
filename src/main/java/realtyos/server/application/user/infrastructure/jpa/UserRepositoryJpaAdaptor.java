@@ -29,20 +29,8 @@ public class UserRepositoryJpaAdaptor implements UserRepository {
     }
 
     @Override
-    public Optional<User> findByProviderAndProviderIdOrEmail(Oauth2Provider oauth2Provider, String providerId, String email) {
-        return userJpaRepository.findByProviderAndIdOrEmail(oauth2Provider, providerId, email)
-                .map(userMapper::toDomain);
-    }
-
-    @Override
-    public boolean existsByNickname(String nickname) {
-        return userJpaRepository.findAll().stream()
-                .anyMatch(e -> e.getNickname().equals(nickname));
-    }
-
-    @Override
-    public Optional<User> findByEmailAndProvider(Oauth2Provider oauth2Provider, String email) {
-        return userJpaRepository.findByOauth2ProviderAndEmail(oauth2Provider, email)
+    public Optional<User> findByProviderAndProviderId(Oauth2Provider oauth2Provider, String providerId) {
+        return userJpaRepository.findByOauth2ProviderAndProviderId(oauth2Provider, providerId)
                 .map(userMapper::toDomain);
     }
 

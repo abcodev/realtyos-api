@@ -36,6 +36,8 @@ dependencies {
 
 	// Spring MVC
 	implementation 'org.springframework.boot:spring-boot-starter-web'
+	implementation 'org.springframework.boot:spring-boot-starter-security'
+	implementation 'org.springframework.boot:spring-boot-starter-oauth2-client'
 
 	// Actuator (헬스체크)
 	implementation 'org.springframework.boot:spring-boot-starter-actuator'
@@ -88,7 +90,6 @@ dependencies {
 	runtimeOnly 'io.jsonwebtoken:jjwt-impl:0.12.6'
 	runtimeOnly 'io.jsonwebtoken:jjwt-jackson:0.12.6'
 
-	implementation 'com.nimbusds:nimbus-jose-jwt:10.0.2'
 
 	// Firebase Admin SDK (Push Notification)
 	implementation 'com.google.firebase:firebase-admin:9.2.0'
@@ -97,6 +98,19 @@ dependencies {
 
 tasks.named('test') {
 	useJUnitPlatform()
+	[
+			'rag.test.embedding-provider',
+			'rag.test.embedding-model',
+			'rag.test.document-limit',
+			'rag.test.embedding-limit',
+			'rag.test.repeat-until-complete',
+			'rag.test.max-batches',
+			'rag.quality.enabled'
+	].each { key ->
+		if (System.getProperty(key) != null) {
+			systemProperty key, System.getProperty(key)
+		}
+	}
 //	testLogging {
 //		showStandardStreams = true
 //	}

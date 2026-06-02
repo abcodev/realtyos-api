@@ -23,10 +23,10 @@ public class RagSyncScheduler {
     @Value("${rag.sync.embedding-limit:1000}")
     private int embeddingLimit;
 
-    @Value("${rag.sync.embedding-provider:OLLAMA}")
+    @Value("${rag.sync.embedding-provider:OPENAI}")
     private String embeddingProvider;
 
-    @Value("${rag.sync.embedding-model:nomic-embed-text}")
+    @Value("${rag.sync.embedding-model:text-embedding-3-small}")
     private String embeddingModel;
 
     @Scheduled(cron = "${rag.sync.cron:0 30 4 * * ?}", zone = "${rag.sync.zone:Asia/Seoul}")
@@ -36,14 +36,30 @@ public class RagSyncScheduler {
         }
 
         try {
-            syncService.syncDealDocumentsAndEmbeddings(
-                    documentLimit,
-                    embeddingLimit,
-                    embeddingProvider,
-                    embeddingModel
-            );
+            syncConfigured();
         } catch (Exception e) {
             log.error("RAG 실거래가 문서/임베딩 동기화 실패", e);
         }
+    }
+
+    public void syncAfterDealsBatch() {
+        if (!enabled) {
+            return;
+        }
+
+        try {
+            syncConfigured();
+        } catch (Exception e) {
+            log.error("실거래 데이터 수집 후 RAG 문서/임베딩 동기화 실패", e);
+        }
+    }
+
+    private void syncConfigured() {
+        syncService.syncDealDocumentsAndEmbeddings(
+                documentLimit,
+                embeddingLimit,
+                embeddingProvider,
+                embeddingModel
+        );
     }
 }

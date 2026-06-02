@@ -1,20 +1,15 @@
 package realtyos.server.application.user.domain;
 
+import java.util.Optional;
 import realtyos.server.application.auth.domain.Oauth2Provider;
 
-import java.util.Optional;
-
 public interface UserRepository {
-
-    boolean existsByNickname(String nickname);
-
-    Optional<User> findByEmailAndProvider(Oauth2Provider oauth2Provider, String email);
 
     Optional<User> findById(Long id);
 
     User fetchBy(long userId);
 
-    Optional<User> findByProviderAndProviderIdOrEmail(Oauth2Provider oauth2Provider, String providerId, String email);
+    Optional<User> findByProviderAndProviderId(Oauth2Provider oauth2Provider, String providerId);
 
     User save(User user);
 

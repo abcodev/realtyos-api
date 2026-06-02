@@ -17,5 +17,7 @@ public interface RagDocumentRepository {
             RagSearchCondition condition
     );
 
+    List<RagSearchResult> searchDealsByKeyword(int topK, RagSearchCondition condition);
+
     RagIndexStats getIndexStats(EmbeddingModelProfile profile);
 }

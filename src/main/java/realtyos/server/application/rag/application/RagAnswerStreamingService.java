@@ -24,6 +24,7 @@ public class RagAnswerStreamingService {
     private final RagAiGateway aiGateway;
     private final UserAiMemoryService memoryService;
     private final RagAnswerPromptBuilder promptBuilder;
+    private final RagAnswerGuardrail guardrail;
 
     public void stream(Long userId, String query, Integer topK, String embeddingProvider, String embeddingModel,
                        String answerProvider, String answerModel, RagSearchCondition condition,
@@ -46,10 +47,29 @@ public class RagAnswerStreamingService {
         );
         send(eventConsumer, "retrieval_completed", Map.of("sourceCount", searchResults.size()));
 
-        if (searchResults.isEmpty()) {
+        if (!guardrail.hasUsableEvidence(personalizedCondition, searchResults)) {
             memoryService.record(userId, query, personalizedCondition);
-            send(eventConsumer, "token", Map.of("text", "관련 실거래가 문서를 찾지 못했습니다."));
-            send(eventConsumer, "completed", Map.of("sourceCount", 0));
+            String answer = guardrail.noMatchingEvidenceMessage();
+            send(eventConsumer, "token", Map.of("text", answer));
+            send(eventConsumer, "completed", Map.of(
+                    "answer", answer,
+                    "sourceCount", 0
+            ));
+            return;
+        }
+
+        List<RagAnswerSource> sources = searchResults.stream()
+                .map(RagAnswerSource::from)
+                .toList();
+        if (guardrail.shouldUseEvidenceSummary(query)) {
+            memoryService.record(userId, query, personalizedCondition);
+            String answer = guardrail.buildEvidenceSummary(searchResults);
+            send(eventConsumer, "token", Map.of("text", answer));
+            send(eventConsumer, "completed", Map.of(
+                    "answer", answer,
+                    "sourceCount", sources.size(),
+                    "sources", sources
+            ));
             return;
         }
 
@@ -61,13 +81,15 @@ public class RagAnswerStreamingService {
                 "reason", route.reason()
         ));
 
-        aiGateway.stream(route, ENTITY_TYPE, prompt, chunk -> send(eventConsumer, "token", Map.of("text", chunk)));
+        StringBuilder answer = new StringBuilder();
+        aiGateway.stream(route, ENTITY_TYPE, prompt, chunk -> {
+            answer.append(chunk);
+            send(eventConsumer, "token", Map.of("text", chunk));
+        });
 
-        List<RagAnswerSource> sources = searchResults.stream()
-                .map(RagAnswerSource::from)
-                .toList();
         memoryService.record(userId, query, personalizedCondition);
         send(eventConsumer, "completed", Map.of(
+                "answer", answer.toString(),
                 "sourceCount", sources.size(),
                 "sources", sources
         ));

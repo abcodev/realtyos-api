@@ -8,6 +8,8 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatusCode;
 import org.springframework.http.MediaType;
+import org.springframework.core.io.buffer.DataBuffer;
+import org.springframework.core.io.buffer.DataBufferUtils;
 import org.springframework.stereotype.Component;
 import org.springframework.web.reactive.function.client.WebClient;
 import reactor.core.publisher.Mono;
@@ -16,7 +18,7 @@ import realtyos.server.application.common.ai.AiProvider;
 import realtyos.server.application.common.ai.config.AiConfig;
 import realtyos.server.application.common.ai.prompt.AiPromptTemplateJpaEntity;
 
-import java.util.Arrays;
+import java.nio.charset.StandardCharsets;
 import java.util.function.Consumer;
 
 @Component
@@ -37,11 +39,12 @@ public class OllamaClient implements AiClient {
 
     @Override
     public String chat(AiPromptTemplateJpaEntity template, String userMessage, String model) {
+        String chatUrl = aiConfig.getOllama().getBaseUrl() + CHAT_PATH;
         try {
             ObjectNode requestBody = buildRequestBody(template, applyUserPromptTemplate(template, userMessage), model, false);
 
             String responseBody = webClient.post()
-                    .uri(aiConfig.getOllama().getBaseUrl() + CHAT_PATH)
+                    .uri(chatUrl)
                     .contentType(MediaType.APPLICATION_JSON)
                     .bodyValue(requestBody.toString())
                     .retrieve()
@@ -55,7 +58,9 @@ public class OllamaClient implements AiClient {
 
             return extractContent(responseBody);
         } catch (Exception e) {
-            log.error("Ollama API 호출 실패", e);
+            log.error("Ollama API 호출 실패 - url: {}, model: {}, promptLength: {}, cause: {}",
+                    chatUrl, resolveModel(template, model), userMessage == null ? 0 : userMessage.length(),
+                    rootCauseMessage(e), e);
             throw new RuntimeException("Ollama API 호출 중 오류가 발생했습니다.", e);
         }
     }
@@ -63,11 +68,13 @@ public class OllamaClient implements AiClient {
     @Override
     public void streamChat(AiPromptTemplateJpaEntity template, String userMessage, String model,
                            Consumer<String> onChunk) {
+        String chatUrl = aiConfig.getOllama().getBaseUrl() + CHAT_PATH;
         try {
             ObjectNode requestBody = buildRequestBody(template, applyUserPromptTemplate(template, userMessage), model, true);
 
+            StringBuilder lineBuffer = new StringBuilder();
             webClient.post()
-                    .uri(aiConfig.getOllama().getBaseUrl() + CHAT_PATH)
+                    .uri(chatUrl)
                     .contentType(MediaType.APPLICATION_JSON)
                     .accept(MediaType.APPLICATION_NDJSON, MediaType.APPLICATION_JSON)
                     .bodyValue(requestBody.toString())
@@ -77,15 +84,15 @@ public class OllamaClient implements AiClient {
                             .flatMap(body -> Mono.error(new IllegalStateException(
                                     "Ollama chat stream API error - status: %s, body: %s"
                                             .formatted(response.statusCode(), body)))))
-                    .bodyToFlux(String.class)
-                    .flatMapIterable(chunk -> Arrays.asList(chunk.split("\\R")))
-                    .filter(line -> line != null && !line.isBlank())
-                    .map(this::extractStreamContent)
-                    .filter(content -> content != null && !content.isEmpty())
-                    .doOnNext(onChunk)
+                    .bodyToFlux(DataBuffer.class)
+                    .map(this::decodeAndRelease)
+                    .doOnNext(chunk -> emitCompletedStreamLines(lineBuffer, chunk, onChunk))
                     .blockLast();
+            emitStreamLine(lineBuffer.toString(), onChunk);
         } catch (Exception e) {
-            log.error("Ollama 스트리밍 API 호출 실패", e);
+            log.error("Ollama 스트리밍 API 호출 실패 - url: {}, model: {}, promptLength: {}, cause: {}",
+                    chatUrl, resolveModel(template, model), userMessage == null ? 0 : userMessage.length(),
+                    rootCauseMessage(e), e);
             throw new RuntimeException("Ollama 스트리밍 API 호출 중 오류가 발생했습니다.", e);
         }
     }
@@ -105,13 +112,15 @@ public class OllamaClient implements AiClient {
     private ObjectNode buildRequestBody(AiPromptTemplateJpaEntity template, String userMessage, String modelOverride,
                                         boolean stream) {
         ObjectNode body = objectMapper.createObjectNode();
-        String model = modelOverride != null && !modelOverride.isBlank()
-                ? modelOverride
-                : template.getModel() != null ? template.getModel() : aiConfig.getOllama().getChatModel();
+        String model = resolveModel(template, modelOverride);
         body.put("model", model);
         body.put("stream", stream);
+        body.put("think", aiConfig.getOllama().isThinkEnabled());
+
+        ObjectNode options = body.putObject("options");
+        options.put("num_ctx", aiConfig.getOllama().getChatNumCtx());
+        options.put("num_predict", aiConfig.getOllama().getChatNumPredict());
         if (template.getTemperature() != null) {
-            ObjectNode options = body.putObject("options");
             options.put("temperature", template.getTemperature().doubleValue());
         }
 
@@ -126,6 +135,20 @@ public class OllamaClient implements AiClient {
         return body;
     }
 
+    private String resolveModel(AiPromptTemplateJpaEntity template, String modelOverride) {
+        return modelOverride != null && !modelOverride.isBlank()
+                ? modelOverride
+                : template.getModel() != null ? template.getModel() : aiConfig.getOllama().getChatModel();
+    }
+
+    private String rootCauseMessage(Throwable throwable) {
+        Throwable current = throwable;
+        while (current.getCause() != null) {
+            current = current.getCause();
+        }
+        return current.getClass().getSimpleName() + ": " + current.getMessage();
+    }
+
     private String extractContent(String responseBody) throws Exception {
         JsonNode root = objectMapper.readTree(responseBody);
         return root.path("message").path("content").asText();
@@ -138,6 +161,33 @@ public class OllamaClient implements AiClient {
         } catch (Exception e) {
             log.debug("Ollama 스트리밍 응답 조각 파싱 실패: {}", responseLine, e);
             return "";
+        }
+    }
+
+    private String decodeAndRelease(DataBuffer dataBuffer) {
+        byte[] bytes = new byte[dataBuffer.readableByteCount()];
+        dataBuffer.read(bytes);
+        DataBufferUtils.release(dataBuffer);
+        return new String(bytes, StandardCharsets.UTF_8);
+    }
+
+    private void emitCompletedStreamLines(StringBuilder lineBuffer, String chunk, Consumer<String> onChunk) {
+        lineBuffer.append(chunk);
+        int newlineIndex;
+        while ((newlineIndex = lineBuffer.indexOf("\n")) >= 0) {
+            String line = lineBuffer.substring(0, newlineIndex);
+            lineBuffer.delete(0, newlineIndex + 1);
+            emitStreamLine(line, onChunk);
+        }
+    }
+
+    private void emitStreamLine(String line, Consumer<String> onChunk) {
+        if (line == null || line.isBlank()) {
+            return;
+        }
+        String content = extractStreamContent(line.strip());
+        if (content != null && !content.isEmpty()) {
+            onChunk.accept(content);
         }
     }
 }

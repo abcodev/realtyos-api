@@ -26,14 +26,17 @@ public class UserJpaEntity extends BaseEntity {
     @Column(name = "id")
     private Long id;
 
-    @Column(nullable = false, unique = true)
-    private String email;
-
     @Column(name = "provider_id", length = 100)
     private String providerId;
 
-    @Column(name = "nickname", length = 50, nullable = false)
+    @Column(unique = true)
+    private String email;
+
+    @Column(name = "nickname", length = 50)
     private String nickname;
+
+    @Column(name = "name", length = 100)
+    private String name;
 
     @Enumerated(EnumType.STRING)
     private UserType userType;

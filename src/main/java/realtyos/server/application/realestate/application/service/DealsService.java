@@ -21,7 +21,8 @@ public class DealsService {
     private final BgdCodeRepository bgdCodeRepository;
 
     public void fetchAndSaveDeals() {
-        String dealYmd = YearMonth.now().format(DEAL_YMD_FORMATTER);
+//        String dealYmd = YearMonth.now().format(DEAL_YMD_FORMATTER);
+        String dealYmd = "202604";
         List<String> bgdCodes = bgdCodeRepository.findDistinctBgdCodes();
 
         if (bgdCodes.isEmpty()) {

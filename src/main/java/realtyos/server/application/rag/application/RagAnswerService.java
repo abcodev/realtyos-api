@@ -24,6 +24,7 @@ public class RagAnswerService {
     private final RagAiGateway aiGateway;
     private final UserAiMemoryService memoryService;
     private final RagAnswerPromptBuilder promptBuilder;
+    private final RagAnswerGuardrail guardrail;
 
     public RagAnswer answer(Long userId, String query, Integer topK, String embeddingProvider, String embeddingModel,
                             String answerProvider, String answerModel, RagSearchCondition condition) {
@@ -37,16 +38,22 @@ public class RagAnswerService {
                 embeddingModel,
                 personalizedCondition
         );
-        if (searchResults.isEmpty()) {
+        if (!guardrail.hasUsableEvidence(personalizedCondition, searchResults)) {
             memoryService.record(userId, query, personalizedCondition);
-            return new RagAnswer("관련 실거래가 문서를 찾지 못했습니다.", List.of());
+            return new RagAnswer(guardrail.noMatchingEvidenceMessage(), List.of());
+        }
+
+        List<RagAnswerSource> sources = searchResults.stream()
+                .map(RagAnswerSource::from)
+                .toList();
+        if (guardrail.shouldUseEvidenceSummary(query)) {
+            memoryService.record(userId, query, personalizedCondition);
+            return new RagAnswer(guardrail.buildEvidenceSummary(searchResults), sources);
         }
 
         String prompt = promptBuilder.build(query, searchResults, memory.map(UserAiMemory::toPromptContext).orElse(null));
         String answer = aiGateway.askRouted(ENTITY_TYPE, prompt, answerProvider, answerModel);
-        List<RagAnswerSource> sources = searchResults.stream()
-                .map(RagAnswerSource::from)
-                .toList();
+        answer = guardrail.finalizeAnswer(answer, searchResults);
 
         memoryService.record(userId, query, personalizedCondition);
         log.info("RAG answer completed - query: {}, sourceCount: {}", query, sources.size());
