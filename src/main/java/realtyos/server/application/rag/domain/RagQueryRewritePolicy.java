@@ -11,7 +11,7 @@ public class RagQueryRewritePolicy {
 
     private static final Pattern EOK_PRICE_PATTERN = Pattern.compile("(\\d+(?:\\.\\d+)?)\\s*억\\s*(이상|초과|부터|이하|미만|까지|대)?");
     private static final Pattern MANWON_PRICE_PATTERN = Pattern.compile("(\\d{4,})\\s*만\\s*원?\\s*(이상|초과|부터|이하|미만|까지)?");
-    private static final Pattern AREA_PATTERN = Pattern.compile("(\\d+(?:\\.\\d+)?)\\s*(?:제곱|평방|㎡|m2|m\\^2)");
+    private static final Pattern AREA_PATTERN = Pattern.compile("(\\d+(?:\\.\\d+)?)\\s*(?:제곱|평방|㎡|m2|m\\^2)\\s*(이상|초과|부터|이하|미만|까지)?");
     private static final Pattern PYEONG_RANGE_PATTERN = Pattern.compile("(\\d+(?:\\.\\d+)?)\\s*평\\s*대");
     private static final Pattern PYEONG_PATTERN = Pattern.compile("(\\d+(?:\\.\\d+)?)\\s*평(?:형)?");
     private static final Pattern YEAR_MONTH_PATTERN = Pattern.compile("(20\\d{2})\\s*년(?:\\s*(\\d{1,2})\\s*월)?");
@@ -200,6 +200,14 @@ public class RagQueryRewritePolicy {
             return new AreaRange(null, null);
         }
         double area = Double.parseDouble(matcher.group(1));
+        String qualifier = matcher.group(2);
+        if (qualifier != null && !qualifier.isBlank()) {
+            return switch (qualifier) {
+                case "이상", "초과", "부터" -> new AreaRange(area, null);
+                case "이하", "미만", "까지" -> new AreaRange(null, area);
+                default -> new AreaRange(Math.max(0, area - 5), area + 5);
+            };
+        }
         return new AreaRange(Math.max(0, area - 5), area + 5);
     }
 

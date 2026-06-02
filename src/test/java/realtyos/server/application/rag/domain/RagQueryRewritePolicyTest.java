@@ -61,4 +61,13 @@ class RagQueryRewritePolicyTest {
         assertThat(result.condition().minArea()).isEqualTo(66.12);
         assertThat(result.condition().maxArea()).isEqualTo(99.17);
     }
+
+    @Test
+    void infersSquareMeterLowerBound() {
+        RagQueryRewriteResult result = policy.rewrite("서울 34.44㎡ 이상 4억 미만 아파트", null);
+
+        assertThat(result.condition().minArea()).isEqualTo(34.44);
+        assertThat(result.condition().maxArea()).isNull();
+        assertThat(result.condition().maxPrice()).isEqualTo(40000L);
+    }
 }

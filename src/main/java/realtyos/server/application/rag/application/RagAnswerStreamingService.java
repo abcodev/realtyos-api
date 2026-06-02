@@ -8,6 +8,8 @@ import realtyos.server.application.rag.domain.RagAnswerSource;
 import realtyos.server.application.rag.domain.RagSearchCondition;
 import realtyos.server.application.rag.domain.RagSearchResult;
 import realtyos.server.application.rag.domain.UserAiMemory;
+import realtyos.server.application.realestate.application.service.RealestateDecisionService;
+import realtyos.server.application.realestate.domain.DecisionResult;
 
 import java.util.List;
 import java.util.Map;
@@ -25,6 +27,7 @@ public class RagAnswerStreamingService {
     private final UserAiMemoryService memoryService;
     private final RagAnswerPromptBuilder promptBuilder;
     private final RagAnswerGuardrail guardrail;
+    private final RealestateDecisionService decisionService;
 
     public void stream(Long userId, String query, Integer topK, String embeddingProvider, String embeddingModel,
                        String answerProvider, String answerModel, RagSearchCondition condition,
@@ -36,6 +39,22 @@ public class RagAnswerStreamingService {
         ));
 
         RagSearchCondition personalizedCondition = memoryService.merge(userId, query, condition);
+
+        if (decisionService.supports(query)) {
+            DecisionResult decision = decisionService.decide(query, topK, personalizedCondition);
+            List<RagAnswerSource> sources = DecisionAnswerSourceMapper.from(decision);
+            String answer = decisionService.formatAnswer(decision);
+            memoryService.record(userId, query, decision.condition());
+            send(eventConsumer, "retrieval_started", Map.of("query", query));
+            send(eventConsumer, "retrieval_completed", Map.of("sourceCount", sources.size()));
+            send(eventConsumer, "token", Map.of("text", answer));
+            send(eventConsumer, "completed", Map.of(
+                    "answer", answer,
+                    "sourceCount", sources.size(),
+                    "sources", sources
+            ));
+            return;
+        }
 
         send(eventConsumer, "retrieval_started", Map.of("query", query));
         List<RagSearchResult> searchResults = searchService.search(

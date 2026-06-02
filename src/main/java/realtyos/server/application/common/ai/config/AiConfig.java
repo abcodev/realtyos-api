@@ -47,7 +47,7 @@ public class AiConfig {
         private int embeddingBatchSize = 10;
         private boolean thinkEnabled = false;
         private int chatNumCtx = 4096;
-        private int chatNumPredict = 400;
+        private int chatNumPredict = 1200;
     }
 
     @Getter

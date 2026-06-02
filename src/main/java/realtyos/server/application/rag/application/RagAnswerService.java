@@ -9,6 +9,8 @@ import realtyos.server.application.rag.domain.RagAnswerSource;
 import realtyos.server.application.rag.domain.RagSearchCondition;
 import realtyos.server.application.rag.domain.RagSearchResult;
 import realtyos.server.application.rag.domain.UserAiMemory;
+import realtyos.server.application.realestate.application.service.RealestateDecisionService;
+import realtyos.server.application.realestate.domain.DecisionResult;
 
 import java.util.List;
 import java.util.Optional;
@@ -25,11 +27,21 @@ public class RagAnswerService {
     private final UserAiMemoryService memoryService;
     private final RagAnswerPromptBuilder promptBuilder;
     private final RagAnswerGuardrail guardrail;
+    private final RealestateDecisionService decisionService;
 
     public RagAnswer answer(Long userId, String query, Integer topK, String embeddingProvider, String embeddingModel,
                             String answerProvider, String answerModel, RagSearchCondition condition) {
         Optional<UserAiMemory> memory = memoryService.find(userId);
         RagSearchCondition personalizedCondition = memoryService.merge(userId, query, condition);
+
+        if (decisionService.supports(query)) {
+            DecisionResult decision = decisionService.decide(query, topK, personalizedCondition);
+            memoryService.record(userId, query, decision.condition());
+            return new RagAnswer(
+                    decisionService.formatAnswer(decision),
+                    DecisionAnswerSourceMapper.from(decision)
+            );
+        }
 
         List<RagSearchResult> searchResults = searchService.search(
                 query,
