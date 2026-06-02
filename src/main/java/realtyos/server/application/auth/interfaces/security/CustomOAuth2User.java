@@ -5,7 +5,7 @@ import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.oauth2.core.oidc.OidcIdToken;
 import org.springframework.security.oauth2.core.oidc.OidcUserInfo;
 import org.springframework.security.oauth2.core.oidc.user.OidcUser;
-import realtyos.server.application.auth.interfaces.dto.LoginResponse;
+import realtyos.server.application.auth.application.AuthLoginResult;
 
 import java.util.Collection;
 import java.util.List;
@@ -13,24 +13,24 @@ import java.util.Map;
 
 public class CustomOAuth2User implements OidcUser {
 
-    private final LoginResponse loginResponse;
+    private final AuthLoginResult loginResult;
     private final Collection<GrantedAuthority> authorities;
     private final Map<String, Object> attributes;
     private final OidcIdToken idToken;
     private final OidcUserInfo oidcUserInfo;
 
-    public CustomOAuth2User(LoginResponse loginResponse, Map<String, Object> attributes) {
-        this(loginResponse, attributes, null, null);
+    public CustomOAuth2User(AuthLoginResult loginResult, Map<String, Object> attributes) {
+        this(loginResult, attributes, null, null);
     }
 
     public CustomOAuth2User(
-            LoginResponse loginResponse,
+            AuthLoginResult loginResult,
             Map<String, Object> attributes,
             OidcIdToken idToken,
             OidcUserInfo oidcUserInfo
     ) {
-        this.loginResponse = loginResponse;
-        this.authorities = List.of(new SimpleGrantedAuthority("ROLE_" + loginResponse.userType()));
+        this.loginResult = loginResult;
+        this.authorities = List.of(new SimpleGrantedAuthority("ROLE_" + loginResult.userType()));
         this.attributes = attributes;
         this.idToken = idToken;
         this.oidcUserInfo = oidcUserInfo;
@@ -48,7 +48,7 @@ public class CustomOAuth2User implements OidcUser {
 
     @Override
     public String getName() {
-        return String.valueOf(loginResponse.userId());
+        return String.valueOf(loginResult.userId());
     }
 
     @Override
@@ -66,7 +66,7 @@ public class CustomOAuth2User implements OidcUser {
         return idToken;
     }
 
-    public LoginResponse getLoginResponse() {
-        return loginResponse;
+    public AuthLoginResult getLoginResult() {
+        return loginResult;
     }
 }

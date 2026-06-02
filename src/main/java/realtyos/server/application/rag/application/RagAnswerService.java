@@ -9,6 +9,8 @@ import realtyos.server.application.rag.domain.RagAnswerSource;
 import realtyos.server.application.rag.domain.RagSearchCondition;
 import realtyos.server.application.rag.domain.RagSearchResult;
 import realtyos.server.application.rag.domain.UserAiMemory;
+import realtyos.server.application.realestate.application.service.RealestateDecisionService;
+import realtyos.server.application.realestate.domain.DecisionResult;
 
 import java.util.List;
 import java.util.Optional;
@@ -25,11 +27,27 @@ public class RagAnswerService {
     private final UserAiMemoryService memoryService;
     private final RagAnswerPromptBuilder promptBuilder;
     private final RagAnswerGuardrail guardrail;
+    private final RealestateDecisionService decisionService;
+    private final RagAnswerRouter answerRouter;
 
     public RagAnswer answer(Long userId, String query, Integer topK, String embeddingProvider, String embeddingModel,
                             String answerProvider, String answerModel, RagSearchCondition condition) {
         Optional<UserAiMemory> memory = memoryService.find(userId);
         RagSearchCondition personalizedCondition = memoryService.merge(userId, query, condition);
+
+        RagAnswerRoute route = answerRouter.route(query);
+        if (route.usesDecisionEngine()) {
+            DecisionResult decision = decisionService.decide(query, topK, personalizedCondition);
+            List<RagAnswerSource> sources = DecisionAnswerSourceMapper.from(decision);
+            String answer = decisionService.formatAnswer(decision);
+            memoryService.record(userId, query, decision.condition(), answer, sources, decision, "DECISION_ENGINE:" + route.type());
+            log.info("RAG answer routed to decision engine - route: {}, reason: {}, query: {}", route.type(), route.reason(), query);
+            return new RagAnswer(
+                    answer,
+                    sources,
+                    decision
+            );
+        }
 
         List<RagSearchResult> searchResults = searchService.search(
                 query,
@@ -39,23 +57,25 @@ public class RagAnswerService {
                 personalizedCondition
         );
         if (!guardrail.hasUsableEvidence(personalizedCondition, searchResults)) {
-            memoryService.record(userId, query, personalizedCondition);
-            return new RagAnswer(guardrail.noMatchingEvidenceMessage(), List.of());
+            String answer = guardrail.noMatchingEvidenceMessage();
+            memoryService.record(userId, query, personalizedCondition, answer, List.of(), null, "SYSTEM");
+            return new RagAnswer(answer, List.of());
         }
 
         List<RagAnswerSource> sources = searchResults.stream()
                 .map(RagAnswerSource::from)
                 .toList();
         if (guardrail.shouldUseEvidenceSummary(query)) {
-            memoryService.record(userId, query, personalizedCondition);
-            return new RagAnswer(guardrail.buildEvidenceSummary(searchResults), sources);
+            String answer = guardrail.buildEvidenceSummary(searchResults);
+            memoryService.record(userId, query, personalizedCondition, answer, sources, null, "SYSTEM");
+            return new RagAnswer(answer, sources);
         }
 
         String prompt = promptBuilder.build(query, searchResults, memory.map(UserAiMemory::toPromptContext).orElse(null));
         String answer = aiGateway.askRouted(ENTITY_TYPE, prompt, answerProvider, answerModel);
         answer = guardrail.finalizeAnswer(answer, searchResults);
 
-        memoryService.record(userId, query, personalizedCondition);
+        memoryService.record(userId, query, personalizedCondition, answer, sources, null, RagModelName.of(answerProvider, answerModel));
         log.info("RAG answer completed - query: {}, sourceCount: {}", query, sources.size());
         return new RagAnswer(answer, sources);
     }

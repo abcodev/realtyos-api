@@ -33,7 +33,7 @@ import java.util.concurrent.CompletableFuture;
 @Slf4j
 public class RagAnswerController {
 
-    private static final long SSE_TIMEOUT_MILLIS = 120_000L;
+    private static final long SSE_TIMEOUT_MILLIS = 300_000L;
 
     private final RagAnswerService answerService;
     private final RagAnswerStreamingService streamingService;

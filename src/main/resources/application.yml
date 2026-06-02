@@ -94,7 +94,7 @@ ai:
     embedding-batch-size: ${OLLAMA_EMBEDDING_BATCH_SIZE:10}
     think-enabled: ${OLLAMA_THINK_ENABLED:false}
     chat-num-ctx: ${OLLAMA_CHAT_NUM_CTX:4096}
-    chat-num-predict: ${OLLAMA_CHAT_NUM_PREDICT:400}
+    chat-num-predict: ${OLLAMA_CHAT_NUM_PREDICT:1200}
   router:
     enabled: ${AI_ROUTER_ENABLED:true}
     local-first: ${AI_ROUTER_LOCAL_FIRST:true}

@@ -9,7 +9,6 @@ import jakarta.persistence.Table;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
-import realtyos.server.application.rag.domain.UserAiMemoryEvent;
 
 import java.time.LocalDateTime;
 
@@ -41,31 +40,46 @@ public class UserAiMemoryEventJpaEntity {
     @Column(name = "max_price")
     private Long maxPrice;
 
+    @Column(name = "answer", columnDefinition = "TEXT")
+    private String answer;
+
+    @Column(name = "sources_json", columnDefinition = "TEXT")
+    private String sourcesJson;
+
+    @Column(name = "decision_json", columnDefinition = "TEXT")
+    private String decisionJson;
+
+    @Column(name = "model")
+    private String model;
+
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt = LocalDateTime.now();
 
-    public static UserAiMemoryEventJpaEntity from(UserAiMemoryEvent event) {
+    public static UserAiMemoryEventJpaEntity create(
+            Long userId,
+            String query,
+            String region,
+            String apartmentName,
+            Long minPrice,
+            Long maxPrice,
+            String answer,
+            String sourcesJson,
+            String decisionJson,
+            String model,
+            LocalDateTime createdAt
+    ) {
         UserAiMemoryEventJpaEntity entity = new UserAiMemoryEventJpaEntity();
-        entity.userId = event.userId();
-        entity.query = event.query();
-        entity.region = event.region();
-        entity.apartmentName = event.apartmentName();
-        entity.minPrice = event.minPrice();
-        entity.maxPrice = event.maxPrice();
-        entity.createdAt = event.createdAt();
+        entity.userId = userId;
+        entity.query = query;
+        entity.region = region;
+        entity.apartmentName = apartmentName;
+        entity.minPrice = minPrice;
+        entity.maxPrice = maxPrice;
+        entity.answer = answer;
+        entity.sourcesJson = sourcesJson;
+        entity.decisionJson = decisionJson;
+        entity.model = model;
+        entity.createdAt = createdAt == null ? LocalDateTime.now() : createdAt;
         return entity;
-    }
-
-    public UserAiMemoryEvent toDomain() {
-        return new UserAiMemoryEvent(
-                id,
-                userId,
-                query,
-                region,
-                apartmentName,
-                minPrice,
-                maxPrice,
-                createdAt
-        );
     }
 }

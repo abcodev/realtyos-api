@@ -3,10 +3,9 @@ package realtyos.server.application.auth.application;
 import realtyos.server.application.auth.domain.Oauth2Provider;
 import realtyos.server.application.auth.domain.LoginHistory;
 import realtyos.server.application.auth.domain.LoginHistoryRepository;
+import realtyos.server.application.auth.domain.OAuthUserClient;
+import realtyos.server.application.auth.domain.OAuthUserProfile;
 import realtyos.server.application.auth.domain.RefreshTokenStore;
-import realtyos.server.application.auth.infrastructure.oauth.GoogleOAuthClient;
-import realtyos.server.application.auth.infrastructure.oauth.KakaoOAuthClient;
-import realtyos.server.application.auth.interfaces.dto.*;
 import realtyos.server.application.common.exception.BusinessException;
 import realtyos.server.application.common.exception.ErrorCode;
 import realtyos.server.application.user.domain.User;
@@ -24,7 +23,11 @@ import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 
 import java.time.LocalDateTime;
+import java.util.List;
+import java.util.Map;
 import java.util.Optional;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 
 @Slf4j
 @Service
@@ -33,44 +36,35 @@ public class UserAuthService {
 
     private final UserRepository userRepository;
     private final UserHistoryRepository userHistoryRepository;
-    private final KakaoOAuthClient kakaoOAuthClient;
-    private final GoogleOAuthClient googleOAuthClient;
+    private final List<OAuthUserClient> oAuthUserClients;
     private final TokenProvider tokenProvider;
     private final RefreshTokenStore refreshTokenStore;
     private final LoginHistoryRepository loginHistoryRepository;
 
     private static final long REFRESH_TOKEN_TTL_SECONDS = 60L * 60 * 24 * 14; // 14일
 
-    private OAuthUserInfo resolveOAuthUser(
+    private OAuthUserProfile resolveOAuthUser(
             Oauth2Provider oauth2Provider, String accessToken, String idToken, String authorizationCode, String redirectUri) {
-
-        return switch (oauth2Provider) {
-            case KAKAO -> {
-                if (StringUtils.hasText(accessToken)) {
-                    yield kakaoOAuthClient.getUserInfo(accessToken);
-                }
-                if (StringUtils.hasText(authorizationCode)) {
-                    yield kakaoOAuthClient.getKakaoUserInfoByCode(authorizationCode, redirectUri);
-                }
-                throw new IllegalArgumentException("KAKAO requires accessToken or authorizationCode");
-            }
-            case GOOGLE -> googleOAuthClient.getUserInfo(idToken);
-        };
+        OAuthUserClient client = oAuthUserClientsByProvider().get(oauth2Provider);
+        if (client == null) {
+            throw new IllegalArgumentException("Unsupported OAuth provider: " + oauth2Provider);
+        }
+        return client.getUserInfo(accessToken, idToken, authorizationCode, redirectUri);
     }
 
-    public Optional<LoginResponse> login(LoginRequest request, Oauth2Provider oauth2Provider, String clientIp) {
-        OAuthUserInfo userInfo =
-                resolveOAuthUser(oauth2Provider, request.accessToken(), request.idToken(), request.authorizationCode(), request.redirectUri());
+    public Optional<AuthLoginResult> login(AuthLoginCommand command, Oauth2Provider oauth2Provider, String clientIp) {
+        OAuthUserProfile userInfo =
+                resolveOAuthUser(oauth2Provider, command.accessToken(), command.idToken(), command.authorizationCode(), command.redirectUri());
 
-        return Optional.of(loginWithOAuthUser(userInfo, oauth2Provider, clientIp, request.pushEnabled(), request.nickname()));
+        return Optional.of(loginWithOAuthUser(userInfo, oauth2Provider, clientIp, command.pushEnabled(), command.nickname()));
     }
 
-    public LoginResponse loginWithOAuthUser(OAuthUserInfo userInfo, Oauth2Provider oauth2Provider, String clientIp) {
+    public AuthLoginResult loginWithOAuthUser(OAuthUserProfile userInfo, Oauth2Provider oauth2Provider, String clientIp) {
         return loginWithOAuthUser(userInfo, oauth2Provider, clientIp, null, null);
     }
 
-    private LoginResponse loginWithOAuthUser(
-            OAuthUserInfo userInfo,
+    private AuthLoginResult loginWithOAuthUser(
+            OAuthUserProfile userInfo,
             Oauth2Provider oauth2Provider,
             String clientIp,
             String pushEnabled,
@@ -90,7 +84,7 @@ public class UserAuthService {
         refreshTokenStore.save(user.id(), authToken.refreshToken(), REFRESH_TOKEN_TTL_SECONDS);
         recordLoginHistory(user.id(), clientIp);
 
-        return new LoginResponse(
+        return new AuthLoginResult(
                 user.id(),
                 authToken.accessToken(),
                 authToken.refreshToken(),
@@ -108,20 +102,20 @@ public class UserAuthService {
         }
     }
 
-    public LoginResponse signup(UserRegisterRequest request, Oauth2Provider oauth2Provider) {
-        OAuthUserInfo userInfo =
-                resolveOAuthUser(oauth2Provider, request.accessToken(), request.idToken(), request.authorizationCode(), null);
+    public AuthLoginResult signup(AuthSignupCommand command, Oauth2Provider oauth2Provider) {
+        OAuthUserProfile userInfo =
+                resolveOAuthUser(oauth2Provider, command.accessToken(), command.idToken(), command.authorizationCode(), null);
 
-        String nickname = resolveNickname(userInfo, request.nickname());
-        String bio = Optional.ofNullable(request.bio()).orElse("");
+        String nickname = resolveNickname(userInfo, command.nickname());
+        String bio = Optional.ofNullable(command.bio()).orElse("");
 
-        User user = loginOrRegister(userInfo, nickname, bio, oauth2Provider, request.pushEnabled());
+        User user = loginOrRegister(userInfo, nickname, bio, oauth2Provider, command.pushEnabled());
 
         String userTypeName = user.userType() != null ? user.userType().name() : UserType.GENERAL.name();
         AuthToken authToken = tokenProvider.createToken(user.id(), userTypeName);
         refreshTokenStore.save(user.id(), authToken.refreshToken(), REFRESH_TOKEN_TTL_SECONDS);
 
-        return new LoginResponse(
+        return new AuthLoginResult(
                 user.id(),
                 authToken.accessToken(),
                 authToken.refreshToken(),
@@ -135,7 +129,7 @@ public class UserAuthService {
      * Refresh Token으로 Access/Refresh Token 재발급
      */
     @Transactional
-    public LoginResponse reissue(String refreshToken) {
+    public AuthLoginResult reissue(String refreshToken) {
         if (!tokenProvider.validateToken(refreshToken)) {
             throw new BusinessException(ErrorCode.AUTH_INVALID_REFRESH_TOKEN);
         }
@@ -156,7 +150,7 @@ public class UserAuthService {
         AuthToken newToken = tokenProvider.createToken(userId, userTypeName);
         refreshTokenStore.save(userId, newToken.refreshToken(), REFRESH_TOKEN_TTL_SECONDS);
 
-        return new LoginResponse(
+        return new AuthLoginResult(
                 user.id(),
                 newToken.accessToken(),
                 newToken.refreshToken(),
@@ -174,7 +168,7 @@ public class UserAuthService {
         log.info("로그아웃 완료 - userId: {}", userId);
     }
 
-    public User loginOrRegister(OAuthUserInfo user, String nickname, String bio, Oauth2Provider oauth2Provider, String pushEnabled) {
+    public User loginOrRegister(OAuthUserProfile user, String nickname, String bio, Oauth2Provider oauth2Provider, String pushEnabled) {
         return userRepository
                 .findByProviderAndProviderId(oauth2Provider, user.providerId())
                 .map(existingUser -> {
@@ -195,7 +189,7 @@ public class UserAuthService {
                 });
     }
 
-    private User registerNewUser(OAuthUserInfo userInfo, Oauth2Provider oauth2Provider, String pushEnabled, String requestNickname) {
+    private User registerNewUser(OAuthUserProfile userInfo, Oauth2Provider oauth2Provider, String pushEnabled, String requestNickname) {
         log.info("신규회원 등록 {} providerId: {}", oauth2Provider.name(), userInfo.providerId());
 
         String nickname = resolveNickname(userInfo, requestNickname);
@@ -222,7 +216,7 @@ public class UserAuthService {
         return savedUser;
     }
 
-    private String resolveNickname(OAuthUserInfo userInfo, String requestNickname) {
+    private String resolveNickname(OAuthUserProfile userInfo, String requestNickname) {
         if (StringUtils.hasText(requestNickname)) {
             return requestNickname;
         }
@@ -246,5 +240,10 @@ public class UserAuthService {
         refreshTokenStore.delete(userId);
         log.info("회원 탈퇴 처리 완료 - userId: {}", userId);
         return true;
+    }
+
+    private Map<Oauth2Provider, OAuthUserClient> oAuthUserClientsByProvider() {
+        return oAuthUserClients.stream()
+                .collect(Collectors.toMap(OAuthUserClient::provider, Function.identity()));
     }
 }

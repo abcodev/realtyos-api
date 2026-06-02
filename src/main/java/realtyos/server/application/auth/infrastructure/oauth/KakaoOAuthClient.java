@@ -1,6 +1,8 @@
 package realtyos.server.application.auth.infrastructure.oauth;
 
-import realtyos.server.application.auth.interfaces.dto.OAuthUserInfo;
+import realtyos.server.application.auth.domain.OAuthUserClient;
+import realtyos.server.application.auth.domain.OAuthUserProfile;
+import realtyos.server.application.auth.domain.Oauth2Provider;
 import realtyos.server.application.common.exception.AuthExceptionCode;
 import realtyos.server.application.common.exception.CustomAuthException;
 import com.fasterxml.jackson.annotation.JsonProperty;
@@ -19,7 +21,7 @@ import org.springframework.web.client.RestClientResponseException;
 @Slf4j
 @Component
 @RequiredArgsConstructor
-public class KakaoOAuthClient {
+public class KakaoOAuthClient implements OAuthUserClient {
 
     @Value("${oauth.kakao.client-id:${spring.security.oauth2.client.registration.kakao.client-id:}}")
     private String clientId;
@@ -33,7 +35,23 @@ public class KakaoOAuthClient {
      * 인가코드로 카카오 유저 정보를 가져옵니다.
      * (인가코드 → 액세스 토큰 교환 → 유저 프로필 조회)
      */
-    public OAuthUserInfo getKakaoUserInfoByCode(String authorizationCode, String redirectUri) {
+    @Override
+    public Oauth2Provider provider() {
+        return Oauth2Provider.KAKAO;
+    }
+
+    @Override
+    public OAuthUserProfile getUserInfo(String accessToken, String idToken, String authorizationCode, String redirectUri) {
+        if (StringUtils.hasText(accessToken)) {
+            return getUserInfo(accessToken);
+        }
+        if (StringUtils.hasText(authorizationCode)) {
+            return getKakaoUserInfoByCode(authorizationCode, redirectUri);
+        }
+        throw new IllegalArgumentException("KAKAO requires accessToken or authorizationCode");
+    }
+
+    public OAuthUserProfile getKakaoUserInfoByCode(String authorizationCode, String redirectUri) {
         String accessToken = getAccessToken(authorizationCode, redirectUri);
         return getUserInfo(accessToken);
     }
@@ -41,7 +59,7 @@ public class KakaoOAuthClient {
     /**
      * 액세스 토큰으로 카카오 유저 정보를 가져옵니다.
      */
-    public OAuthUserInfo getUserInfo(String accessToken) {
+    public OAuthUserProfile getUserInfo(String accessToken) {
         try {
             KakaoProfileResponse profileResponse = restClient.get()
                     .uri("https://kapi.kakao.com/v2/user/me")
@@ -59,7 +77,7 @@ public class KakaoOAuthClient {
                     profileResponse.kakaoAccount().profile().nickname() : null;
             String providerId = profileResponse.id() != null ? profileResponse.id().toString() : null;
 
-            return new OAuthUserInfo(providerId, email, nickname);
+            return new OAuthUserProfile(providerId, email, nickname);
         } catch (RestClientResponseException e) {
             log.error("Failed to get Kakao user profile: {}", e.getResponseBodyAsString(), e);
             throw new CustomAuthException(AuthExceptionCode.UN_AUTHORIZATION);

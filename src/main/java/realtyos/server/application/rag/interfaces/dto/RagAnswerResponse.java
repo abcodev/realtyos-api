@@ -6,14 +6,16 @@ import java.util.List;
 
 public record RagAnswerResponse(
         String answer,
-        List<RagAnswerSourceResponse> sources
+        List<RagAnswerSourceResponse> sources,
+        RagDecisionResponse decision
 ) {
     public static RagAnswerResponse from(RagAnswer answer) {
         return new RagAnswerResponse(
                 answer.answer(),
                 answer.sources().stream()
                         .map(RagAnswerSourceResponse::from)
-                        .toList()
+                        .toList(),
+                RagDecisionResponse.from(answer.decision())
         );
     }
 }

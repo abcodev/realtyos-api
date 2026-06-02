@@ -7,10 +7,10 @@ import org.springframework.security.oauth2.client.userinfo.OAuth2UserRequest;
 import org.springframework.security.oauth2.core.OAuth2AuthenticationException;
 import org.springframework.security.oauth2.core.user.OAuth2User;
 import org.springframework.stereotype.Service;
+import realtyos.server.application.auth.application.AuthLoginResult;
 import realtyos.server.application.auth.application.UserAuthService;
+import realtyos.server.application.auth.domain.OAuthUserProfile;
 import realtyos.server.application.auth.domain.Oauth2Provider;
-import realtyos.server.application.auth.interfaces.dto.LoginResponse;
-import realtyos.server.application.auth.interfaces.dto.OAuthUserInfo;
 
 @Service
 @RequiredArgsConstructor
@@ -25,10 +25,10 @@ public class CustomOAuth2UserService extends DefaultOAuth2UserService {
 
         String registrationId = userRequest.getClientRegistration().getRegistrationId();
         Oauth2Provider provider = Oauth2Provider.from(registrationId);
-        OAuthUserInfo userInfo = OAuthUserInfoFactory.create(provider, oAuth2User.getAttributes());
-        LoginResponse loginResponse = userAuthService.loginWithOAuthUser(userInfo, provider, resolveClientIp());
+        OAuthUserProfile userInfo = OAuthUserInfoFactory.create(provider, oAuth2User.getAttributes());
+        AuthLoginResult loginResult = userAuthService.loginWithOAuthUser(userInfo, provider, resolveClientIp());
 
-        return new CustomOAuth2User(loginResponse, oAuth2User.getAttributes());
+        return new CustomOAuth2User(loginResult, oAuth2User.getAttributes());
     }
 
     private String resolveClientIp() {

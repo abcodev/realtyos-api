@@ -98,6 +98,9 @@ public class RagAnswerGuardrail {
         if (normalizedRegion.equals("잠실")) {
             return contains(result.region(), "잠실동");
         }
+        if (normalizedRegion.equals("개포")) {
+            return contains(result.region(), "개포동");
+        }
         return contains(result.region(), normalizedRegion)
                 || contains(result.apartmentName(), normalizedRegion);
     }

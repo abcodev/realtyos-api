@@ -10,6 +10,8 @@ import realtyos.server.application.rag.domain.RagEmbeddingToSave;
 import realtyos.server.application.rag.domain.RagIndexStats;
 import realtyos.server.application.rag.domain.RagSearchCondition;
 import realtyos.server.application.rag.domain.RagSearchResult;
+import realtyos.server.application.realestate.domain.RegionResolution;
+import realtyos.server.application.realestate.domain.RegionResolver;
 
 import java.sql.Date;
 import java.sql.PreparedStatement;
@@ -19,7 +21,6 @@ import java.time.LocalDate;
 import java.time.YearMonth;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Map;
 import org.springframework.jdbc.core.BatchPreparedStatementSetter;
 
 @Repository
@@ -27,40 +28,9 @@ import org.springframework.jdbc.core.BatchPreparedStatementSetter;
 public class RagDocumentRepositoryJpaAdaptor implements RagDocumentRepository {
 
     private static final String DEAL_SOURCE_TYPE = "DEAL";
-    private static final Map<String, String> REGION_CODE_ALIASES = Map.ofEntries(
-            Map.entry("강남구", "11680"),
-            Map.entry("강남", "11680"),
-            Map.entry("서초구", "11650"),
-            Map.entry("서초", "11650"),
-            Map.entry("송파구", "11710"),
-            Map.entry("송파", "11710"),
-            Map.entry("마포구", "11440"),
-            Map.entry("마포", "11440"),
-            Map.entry("용산구", "11170"),
-            Map.entry("용산", "11170"),
-            Map.entry("성동구", "11200"),
-            Map.entry("성동", "11200"),
-            Map.entry("영등포구", "11560"),
-            Map.entry("영등포", "11560"),
-            Map.entry("양천구", "11470"),
-            Map.entry("목동", "11470"),
-            Map.entry("분당구", "41135"),
-            Map.entry("분당", "41135"),
-            Map.entry("판교", "41135")
-    );
-    private static final Map<String, String> DONG_ALIASES = Map.ofEntries(
-            Map.entry("대치동", "대치동"),
-            Map.entry("대치", "대치동"),
-            Map.entry("잠실동", "잠실동"),
-            Map.entry("잠실", "잠실동"),
-            Map.entry("반포동", "반포동"),
-            Map.entry("반포", "반포동"),
-            Map.entry("압구정동", "압구정동"),
-            Map.entry("압구정", "압구정동"),
-            Map.entry("목동", "목동")
-    );
 
     private final JdbcTemplate jdbcTemplate;
+    private final RegionResolver regionResolver;
 
     @Override
     public int buildDealDocuments(int limit) {
@@ -570,33 +540,98 @@ public class RagDocumentRepositoryJpaAdaptor implements RagDocumentRepository {
     }
 
     private void appendActualRegionFilter(StringBuilder sql, List<Object> args, String region, boolean includeDocumentRegion) {
-        String normalizedRegion = region.trim();
-        String regionCode = REGION_CODE_ALIASES.get(normalizedRegion);
-        if (regionCode != null) {
-            sql.append(" AND d.sgg_code = ? ");
-            args.add(regionCode);
-            return;
-        }
-        String dongName = DONG_ALIASES.get(normalizedRegion);
-        if (dongName != null) {
-            sql.append(" AND d.umd_name ILIKE ? ");
-            args.add(like(dongName));
+        appendResolvedRegionFilter(sql, args, regionResolver.resolve(region), includeDocumentRegion);
+    }
+
+    private void appendResolvedRegionFilter(
+            StringBuilder sql,
+            List<Object> args,
+            RegionResolution region,
+            boolean includeDocumentRegion
+    ) {
+        if (region == null || !region.hasFilter()) {
             return;
         }
 
+        switch (region.type()) {
+            case SGG -> {
+                sql.append(" AND d.sgg_code IN (")
+                        .append(placeholders(region.sggCodes().size()))
+                        .append(") ");
+                args.addAll(region.sggCodes());
+            }
+            case DONG -> {
+                sql.append(" AND d.umd_name ILIKE ? ");
+                args.add(like(region.dongName()));
+            }
+            case KEYWORD -> appendKeywordRegionFilter(sql, args, region.keyword(), includeDocumentRegion);
+            case NONE -> {
+            }
+        }
+    }
+
+    private void appendKeywordRegionFilter(
+            StringBuilder sql,
+            List<Object> args,
+            String keyword,
+            boolean includeDocumentRegion
+    ) {
         if (includeDocumentRegion) {
-            sql.append(" AND (rd.region ILIKE ? OR d.umd_name ILIKE ? OR d.sgg_code ILIKE ?) ");
-            String value = like(normalizedRegion);
+            sql.append("""
+                 AND (
+                    rd.region ILIKE ?
+                    OR d.umd_name IN (?, ?)
+                    OR d.umd_name ILIKE ?
+                    OR d.sgg_code ILIKE ?
+                    OR d.sgg_code IN (
+                        SELECT DISTINCT substring(b.bgd_code, 1, 5)
+                        FROM real_estate_bgd_code b
+                        WHERE (
+                            b.bgd_name ILIKE ?
+                            OR b.bgd_name ILIKE ?
+                        )
+                        AND b.bgd_code NOT LIKE '__00000000'
+                    )
+                 )
+                """);
+            String value = like(keyword);
+            args.add(value);
+            args.add(keyword);
+            args.add(keyword + "동");
             args.add(value);
             args.add(value);
             args.add(value);
+            args.add(like(keyword + "동"));
             return;
         }
 
-        sql.append(" AND (d.umd_name ILIKE ? OR d.sgg_code ILIKE ?) ");
-        String value = like(normalizedRegion);
+        sql.append("""
+                 AND (
+                    d.umd_name IN (?, ?)
+                    OR d.umd_name ILIKE ?
+                    OR d.sgg_code ILIKE ?
+                    OR d.sgg_code IN (
+                        SELECT DISTINCT substring(b.bgd_code, 1, 5)
+                        FROM real_estate_bgd_code b
+                        WHERE (
+                            b.bgd_name ILIKE ?
+                            OR b.bgd_name ILIKE ?
+                        )
+                        AND b.bgd_code NOT LIKE '__00000000'
+                    )
+                 )
+                """);
+        String value = like(keyword);
+        args.add(keyword);
+        args.add(keyword + "동");
         args.add(value);
         args.add(value);
+        args.add(value);
+        args.add(like(keyword + "동"));
+    }
+
+    private String placeholders(int count) {
+        return "?,".repeat(count).replaceAll(",$", "");
     }
 
     private LocalDate toStartDate(Integer year, Integer month) {
@@ -618,4 +653,5 @@ public class RagDocumentRepositoryJpaAdaptor implements RagDocumentRepository {
         long value = rs.getLong(columnName);
         return rs.wasNull() ? null : value;
     }
+
 }

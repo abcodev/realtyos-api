@@ -7,10 +7,10 @@ import org.springframework.security.oauth2.client.oidc.userinfo.OidcUserService;
 import org.springframework.security.oauth2.core.OAuth2AuthenticationException;
 import org.springframework.security.oauth2.core.oidc.user.OidcUser;
 import org.springframework.stereotype.Service;
+import realtyos.server.application.auth.application.AuthLoginResult;
 import realtyos.server.application.auth.application.UserAuthService;
+import realtyos.server.application.auth.domain.OAuthUserProfile;
 import realtyos.server.application.auth.domain.Oauth2Provider;
-import realtyos.server.application.auth.interfaces.dto.LoginResponse;
-import realtyos.server.application.auth.interfaces.dto.OAuthUserInfo;
 
 @Service
 @RequiredArgsConstructor
@@ -25,11 +25,11 @@ public class CustomOidcUserService extends OidcUserService {
 
         String registrationId = userRequest.getClientRegistration().getRegistrationId();
         Oauth2Provider provider = Oauth2Provider.from(registrationId);
-        OAuthUserInfo userInfo = OAuthUserInfoFactory.create(provider, oidcUser.getAttributes());
-        LoginResponse loginResponse = userAuthService.loginWithOAuthUser(userInfo, provider, resolveClientIp());
+        OAuthUserProfile userInfo = OAuthUserInfoFactory.create(provider, oidcUser.getAttributes());
+        AuthLoginResult loginResult = userAuthService.loginWithOAuthUser(userInfo, provider, resolveClientIp());
 
         return new CustomOAuth2User(
-                loginResponse,
+                loginResult,
                 oidcUser.getAttributes(),
                 oidcUser.getIdToken(),
                 oidcUser.getUserInfo()

@@ -39,7 +39,7 @@ public class LoginController {
             @PathVariable String provider,
             @RequestBody UserRegisterRequest request) {
         Oauth2Provider oauth2Provider = Oauth2Provider.from(provider.toUpperCase());
-        LoginResponse response = userAuthService.signup(request, oauth2Provider);
+        LoginResponse response = LoginResponse.from(userAuthService.signup(request.toCommand(), oauth2Provider));
         return ResponseEntity.ok(response);
     }
 
@@ -52,7 +52,8 @@ public class LoginController {
         Oauth2Provider oauth2Provider = Oauth2Provider.from(provider.toUpperCase());
         String clientIp = resolveClientIp(httpRequest);
         return userAuthService
-                .login(request, oauth2Provider, clientIp)
+                .login(request.toCommand(), oauth2Provider, clientIp)
+                .map(LoginResponse::from)
                 .map(ResponseEntity::ok)
                 .orElseGet(() -> ResponseEntity.status(401).build());
     }
@@ -60,7 +61,7 @@ public class LoginController {
     @Operation(summary = "토큰 재발급", description = "Refresh Token으로 Access/Refresh Token을 재발급합니다.")
     @PostMapping("/reissue")
     public ResponseEntity<LoginResponse> reissue(@RequestBody TokenReissueRequest request) {
-        LoginResponse response = userAuthService.reissue(request.refreshToken());
+        LoginResponse response = LoginResponse.from(userAuthService.reissue(request.refreshToken()));
         return ResponseEntity.ok(response);
     }
 
@@ -68,6 +69,7 @@ public class LoginController {
     @GetMapping("/token/exchange")
     public ResponseEntity<ApiResponse<TokenResponse>> exchangeCode(@RequestParam String code) {
         return oAuthCodeRepository.exchange(code)
+                .map(TokenResponse::from)
                 .map(token -> ResponseEntity.ok(ApiResponse.success(token)))
                 .orElseGet(() -> ResponseEntity.status(HttpStatus.UNAUTHORIZED).build());
     }

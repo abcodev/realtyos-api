@@ -8,14 +8,16 @@ import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientResponseException;
-import realtyos.server.application.auth.interfaces.dto.OAuthUserInfo;
+import realtyos.server.application.auth.domain.OAuthUserClient;
+import realtyos.server.application.auth.domain.OAuthUserProfile;
+import realtyos.server.application.auth.domain.Oauth2Provider;
 import realtyos.server.application.common.exception.AuthExceptionCode;
 import realtyos.server.application.common.exception.CustomAuthException;
 
 @Slf4j
 @Component
 @RequiredArgsConstructor
-public class GoogleOAuthClient {
+public class GoogleOAuthClient implements OAuthUserClient {
 
     private static final String TOKEN_INFO_URL = "https://oauth2.googleapis.com/tokeninfo?id_token={idToken}";
 
@@ -24,7 +26,13 @@ public class GoogleOAuthClient {
     @Value("${oauth.google.client-id:}")
     private String clientId;
 
-    public OAuthUserInfo getUserInfo(String idToken) {
+    @Override
+    public Oauth2Provider provider() {
+        return Oauth2Provider.GOOGLE;
+    }
+
+    @Override
+    public OAuthUserProfile getUserInfo(String accessToken, String idToken, String authorizationCode, String redirectUri) {
         if (!StringUtils.hasText(idToken)) {
             throw new IllegalArgumentException("GOOGLE requires idToken");
         }
@@ -43,7 +51,7 @@ public class GoogleOAuthClient {
                 throw new CustomAuthException(AuthExceptionCode.UN_AUTHORIZATION);
             }
 
-            return new OAuthUserInfo(response.sub(), response.email(), response.name());
+            return new OAuthUserProfile(response.sub(), response.email(), response.name());
         } catch (RestClientResponseException e) {
             log.error("Failed to verify Google id_token: {}", e.getResponseBodyAsString(), e);
             throw new CustomAuthException(AuthExceptionCode.UN_AUTHORIZATION);

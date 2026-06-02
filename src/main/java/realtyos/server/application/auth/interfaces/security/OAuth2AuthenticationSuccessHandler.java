@@ -9,9 +9,9 @@ import org.springframework.security.core.Authentication;
 import org.springframework.security.web.authentication.AuthenticationSuccessHandler;
 import org.springframework.stereotype.Component;
 import org.springframework.web.util.UriComponentsBuilder;
+import realtyos.server.application.auth.application.AuthLoginResult;
+import realtyos.server.application.auth.domain.AuthToken;
 import realtyos.server.application.auth.domain.OAuthCodeRepository;
-import realtyos.server.application.auth.interfaces.dto.LoginResponse;
-import realtyos.server.application.auth.interfaces.dto.TokenResponse;
 
 import java.io.IOException;
 
@@ -32,10 +32,10 @@ public class OAuth2AuthenticationSuccessHandler implements AuthenticationSuccess
             Authentication authentication
     ) throws IOException {
         CustomOAuth2User principal = (CustomOAuth2User) authentication.getPrincipal();
-        LoginResponse loginResponse = principal.getLoginResponse();
-        String code = oAuthCodeRepository.save(new TokenResponse(
-                loginResponse.accessToken(),
-                loginResponse.refreshToken()
+        AuthLoginResult loginResult = principal.getLoginResult();
+        String code = oAuthCodeRepository.save(new AuthToken(
+                loginResult.accessToken(),
+                loginResult.refreshToken()
         ));
 
         String targetUrl = UriComponentsBuilder.fromUriString(frontendRedirectUrl)
