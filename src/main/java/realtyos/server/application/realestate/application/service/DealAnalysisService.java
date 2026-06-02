@@ -7,6 +7,8 @@ import realtyos.server.application.rag.domain.RagSearchCondition;
 import realtyos.server.application.realestate.domain.DecisionCandidate;
 import realtyos.server.application.realestate.domain.DecisionDealSample;
 import realtyos.server.application.realestate.domain.DecisionScoreBreakdown;
+import realtyos.server.application.realestate.domain.RegionResolution;
+import realtyos.server.application.realestate.domain.RegionResolver;
 
 import java.sql.Date;
 import java.time.LocalDate;
@@ -19,6 +21,7 @@ import java.util.List;
 public class DealAnalysisService {
 
     private final JdbcTemplate jdbcTemplate;
+    private final RegionResolver regionResolver;
 
     public List<DecisionCandidate> findCandidates(RagSearchCondition condition, int limit) {
         List<Object> args = new ArrayList<>();
@@ -219,59 +222,7 @@ public class DealAnalysisService {
         if (!hasText(region)) {
             return;
         }
-        String normalizedRegion = region.trim();
-        if (isDongLevelRegion(normalizedRegion)) {
-            sql.append(" AND d.umd_name ILIKE ? ");
-            args.add(like(normalizedRegion));
-            return;
-        }
-        sql.append("""
-                 AND (
-                    (
-                        EXISTS (
-                            SELECT 1
-                            FROM real_estate_sgg_code s
-                            WHERE s.sig_kor_nm IN (?, ?)
-                            OR s.full_nm ILIKE ?
-                        )
-                        AND d.sgg_code IN (
-                            SELECT s.sgg_cd
-                            FROM real_estate_sgg_code s
-                            WHERE s.sig_kor_nm IN (?, ?)
-                            OR s.full_nm ILIKE ?
-                        )
-                    )
-                    OR (
-                        NOT EXISTS (
-                            SELECT 1
-                            FROM real_estate_sgg_code s
-                            WHERE s.sig_kor_nm IN (?, ?)
-                            OR s.full_nm ILIKE ?
-                        )
-                        AND (
-                            d.umd_name IN (?, ?)
-                            OR d.umd_name ILIKE ?
-                            OR d.sgg_code IN (
-                                SELECT DISTINCT substring(b.bgd_code, 1, 5)
-                                FROM real_estate_bgd_code b
-                                WHERE (
-                                    b.bgd_name ILIKE ?
-                                    OR b.bgd_name ILIKE ?
-                                )
-                                AND b.bgd_code NOT LIKE '__00000000'
-                            )
-                        )
-                    )
-                 )
-                """);
-        addSggRegionArgs(args, normalizedRegion);
-        addSggRegionArgs(args, normalizedRegion);
-        addSggRegionArgs(args, normalizedRegion);
-        args.add(normalizedRegion);
-        args.add(normalizedRegion + "동");
-        args.add(like(normalizedRegion));
-        args.add(like(normalizedRegion));
-        args.add(like(normalizedRegion + "동"));
+        appendResolvedRegionFilter(sql, args, regionResolver.resolve(region));
     }
 
     private LocalDate toStartDate(Integer year, Integer month) {
@@ -306,13 +257,49 @@ public class DealAnalysisService {
         return value != null && !value.isBlank();
     }
 
-    private boolean isDongLevelRegion(String value) {
-        return value.endsWith("동") || value.endsWith("읍") || value.endsWith("면") || value.endsWith("리");
+    private void appendResolvedRegionFilter(StringBuilder sql, List<Object> args, RegionResolution region) {
+        if (region == null || !region.hasFilter()) {
+            return;
+        }
+        switch (region.type()) {
+            case SGG -> {
+                sql.append(" AND d.sgg_code IN (")
+                        .append(placeholders(region.sggCodes().size()))
+                        .append(") ");
+                args.addAll(region.sggCodes());
+            }
+            case DONG -> {
+                sql.append(" AND d.umd_name ILIKE ? ");
+                args.add(like(region.dongName()));
+            }
+            case KEYWORD -> {
+                sql.append("""
+                         AND (
+                            d.umd_name IN (?, ?)
+                            OR d.umd_name ILIKE ?
+                            OR d.sgg_code IN (
+                                SELECT DISTINCT substring(b.bgd_code, 1, 5)
+                                FROM real_estate_bgd_code b
+                                WHERE (
+                                    b.bgd_name ILIKE ?
+                                    OR b.bgd_name ILIKE ?
+                                )
+                                AND b.bgd_code NOT LIKE '__00000000'
+                            )
+                         )
+                        """);
+                args.add(region.keyword());
+                args.add(region.keyword() + "동");
+                args.add(like(region.keyword()));
+                args.add(like(region.keyword()));
+                args.add(like(region.keyword() + "동"));
+            }
+            case NONE -> {
+            }
+        }
     }
 
-    private void addSggRegionArgs(List<Object> args, String region) {
-        args.add(region);
-        args.add(region + "구");
-        args.add("% " + region + "구");
+    private String placeholders(int count) {
+        return "?,".repeat(count).replaceAll(",$", "");
     }
 }

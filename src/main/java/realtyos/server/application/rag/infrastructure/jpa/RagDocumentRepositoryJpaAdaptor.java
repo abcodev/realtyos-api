@@ -10,6 +10,8 @@ import realtyos.server.application.rag.domain.RagEmbeddingToSave;
 import realtyos.server.application.rag.domain.RagIndexStats;
 import realtyos.server.application.rag.domain.RagSearchCondition;
 import realtyos.server.application.rag.domain.RagSearchResult;
+import realtyos.server.application.realestate.domain.RegionResolution;
+import realtyos.server.application.realestate.domain.RegionResolver;
 
 import java.sql.Date;
 import java.sql.PreparedStatement;
@@ -28,6 +30,7 @@ public class RagDocumentRepositoryJpaAdaptor implements RagDocumentRepository {
     private static final String DEAL_SOURCE_TYPE = "DEAL";
 
     private final JdbcTemplate jdbcTemplate;
+    private final RegionResolver regionResolver;
 
     @Override
     public int buildDealDocuments(int limit) {
@@ -537,119 +540,98 @@ public class RagDocumentRepositoryJpaAdaptor implements RagDocumentRepository {
     }
 
     private void appendActualRegionFilter(StringBuilder sql, List<Object> args, String region, boolean includeDocumentRegion) {
-        String normalizedRegion = region.trim();
-        if (isDongLevelRegion(normalizedRegion)) {
-            sql.append(" AND d.umd_name ILIKE ? ");
-            args.add(like(normalizedRegion));
+        appendResolvedRegionFilter(sql, args, regionResolver.resolve(region), includeDocumentRegion);
+    }
+
+    private void appendResolvedRegionFilter(
+            StringBuilder sql,
+            List<Object> args,
+            RegionResolution region,
+            boolean includeDocumentRegion
+    ) {
+        if (region == null || !region.hasFilter()) {
             return;
         }
 
+        switch (region.type()) {
+            case SGG -> {
+                sql.append(" AND d.sgg_code IN (")
+                        .append(placeholders(region.sggCodes().size()))
+                        .append(") ");
+                args.addAll(region.sggCodes());
+            }
+            case DONG -> {
+                sql.append(" AND d.umd_name ILIKE ? ");
+                args.add(like(region.dongName()));
+            }
+            case KEYWORD -> appendKeywordRegionFilter(sql, args, region.keyword(), includeDocumentRegion);
+            case NONE -> {
+            }
+        }
+    }
+
+    private void appendKeywordRegionFilter(
+            StringBuilder sql,
+            List<Object> args,
+            String keyword,
+            boolean includeDocumentRegion
+    ) {
         if (includeDocumentRegion) {
             sql.append("""
-                     AND (
-                        (
-                            EXISTS (
-                                SELECT 1
-                                FROM real_estate_sgg_code s
-                                WHERE s.sig_kor_nm IN (?, ?)
-                                OR s.full_nm ILIKE ?
-                            )
-                            AND d.sgg_code IN (
-                                SELECT s.sgg_cd
-                                FROM real_estate_sgg_code s
-                                WHERE s.sig_kor_nm IN (?, ?)
-                                OR s.full_nm ILIKE ?
-                            )
+                 AND (
+                    rd.region ILIKE ?
+                    OR d.umd_name IN (?, ?)
+                    OR d.umd_name ILIKE ?
+                    OR d.sgg_code ILIKE ?
+                    OR d.sgg_code IN (
+                        SELECT DISTINCT substring(b.bgd_code, 1, 5)
+                        FROM real_estate_bgd_code b
+                        WHERE (
+                            b.bgd_name ILIKE ?
+                            OR b.bgd_name ILIKE ?
                         )
-                        OR (
-                            NOT EXISTS (
-                                SELECT 1
-                                FROM real_estate_sgg_code s
-                                WHERE s.sig_kor_nm IN (?, ?)
-                                OR s.full_nm ILIKE ?
-                            )
-                            AND (
-                                rd.region ILIKE ?
-                                OR d.umd_name IN (?, ?)
-                                OR d.umd_name ILIKE ?
-                                OR d.sgg_code ILIKE ?
-                                OR d.sgg_code IN (
-                                    SELECT DISTINCT substring(b.bgd_code, 1, 5)
-                                    FROM real_estate_bgd_code b
-                                    WHERE (
-                                        b.bgd_name ILIKE ?
-                                        OR b.bgd_name ILIKE ?
-                                    )
-                                    AND b.bgd_code NOT LIKE '__00000000'
-                                )
-                            )
-                        )
-                     )
-                    """);
-            addSggRegionArgs(args, normalizedRegion);
-            addSggRegionArgs(args, normalizedRegion);
-            addSggRegionArgs(args, normalizedRegion);
-            String value = like(normalizedRegion);
+                        AND b.bgd_code NOT LIKE '__00000000'
+                    )
+                 )
+                """);
+            String value = like(keyword);
             args.add(value);
-            args.add(normalizedRegion);
-            args.add(normalizedRegion + "동");
+            args.add(keyword);
+            args.add(keyword + "동");
             args.add(value);
             args.add(value);
             args.add(value);
-            args.add(like(normalizedRegion + "동"));
+            args.add(like(keyword + "동"));
             return;
         }
 
         sql.append("""
                  AND (
-                    (
-                        EXISTS (
-                            SELECT 1
-                            FROM real_estate_sgg_code s
-                            WHERE s.sig_kor_nm IN (?, ?)
-                            OR s.full_nm ILIKE ?
+                    d.umd_name IN (?, ?)
+                    OR d.umd_name ILIKE ?
+                    OR d.sgg_code ILIKE ?
+                    OR d.sgg_code IN (
+                        SELECT DISTINCT substring(b.bgd_code, 1, 5)
+                        FROM real_estate_bgd_code b
+                        WHERE (
+                            b.bgd_name ILIKE ?
+                            OR b.bgd_name ILIKE ?
                         )
-                        AND d.sgg_code IN (
-                            SELECT s.sgg_cd
-                            FROM real_estate_sgg_code s
-                            WHERE s.sig_kor_nm IN (?, ?)
-                            OR s.full_nm ILIKE ?
-                        )
-                    )
-                    OR (
-                        NOT EXISTS (
-                            SELECT 1
-                            FROM real_estate_sgg_code s
-                            WHERE s.sig_kor_nm IN (?, ?)
-                            OR s.full_nm ILIKE ?
-                        )
-                        AND (
-                            d.umd_name IN (?, ?)
-                            OR d.umd_name ILIKE ?
-                            OR d.sgg_code ILIKE ?
-                            OR d.sgg_code IN (
-                                SELECT DISTINCT substring(b.bgd_code, 1, 5)
-                                FROM real_estate_bgd_code b
-                                WHERE (
-                                    b.bgd_name ILIKE ?
-                                    OR b.bgd_name ILIKE ?
-                                )
-                                AND b.bgd_code NOT LIKE '__00000000'
-                            )
-                        )
+                        AND b.bgd_code NOT LIKE '__00000000'
                     )
                  )
                 """);
-        String value = like(normalizedRegion);
-        addSggRegionArgs(args, normalizedRegion);
-        addSggRegionArgs(args, normalizedRegion);
-        addSggRegionArgs(args, normalizedRegion);
-        args.add(normalizedRegion);
-        args.add(normalizedRegion + "동");
+        String value = like(keyword);
+        args.add(keyword);
+        args.add(keyword + "동");
         args.add(value);
         args.add(value);
         args.add(value);
-        args.add(like(normalizedRegion + "동"));
+        args.add(like(keyword + "동"));
+    }
+
+    private String placeholders(int count) {
+        return "?,".repeat(count).replaceAll(",$", "");
     }
 
     private LocalDate toStartDate(Integer year, Integer month) {
@@ -672,13 +654,4 @@ public class RagDocumentRepositoryJpaAdaptor implements RagDocumentRepository {
         return rs.wasNull() ? null : value;
     }
 
-    private boolean isDongLevelRegion(String value) {
-        return value.endsWith("동") || value.endsWith("읍") || value.endsWith("면") || value.endsWith("리");
-    }
-
-    private void addSggRegionArgs(List<Object> args, String region) {
-        args.add(region);
-        args.add(region + "구");
-        args.add("% " + region + "구");
-    }
 }

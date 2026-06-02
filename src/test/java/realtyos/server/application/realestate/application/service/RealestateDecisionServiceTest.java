@@ -11,7 +11,7 @@ class RealestateDecisionServiceTest {
 
     @Test
     void doesNotTreatSingleRegionCandidateRecommendationAsMultiTargetComparison() throws Exception {
-        RealestateDecisionService service = new RealestateDecisionService(null, null);
+        RealestateDecisionService service = new RealestateDecisionService(null, null, null, null);
         Method method = RealestateDecisionService.class.getDeclaredMethod("inferComparisonTargets", String.class);
         method.setAccessible(true);
 
