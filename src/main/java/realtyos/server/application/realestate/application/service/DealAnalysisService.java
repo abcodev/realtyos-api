@@ -6,6 +6,7 @@ import org.springframework.stereotype.Service;
 import realtyos.server.application.rag.domain.RagSearchCondition;
 import realtyos.server.application.realestate.domain.DecisionCandidate;
 import realtyos.server.application.realestate.domain.DecisionDealSample;
+import realtyos.server.application.realestate.domain.DecisionScoreBreakdown;
 
 import java.sql.Date;
 import java.time.LocalDate;
@@ -112,6 +113,7 @@ public class DealAnalysisService {
                     getNullableLong(rs, "deal_count"),
                     getNullableLong(rs, "average_price_per_pyeong"),
                     0,
+                    new DecisionScoreBreakdown(0, 0, 0, 0),
                     List.of(),
                     List.of(),
                     findSamples(regionCode, dongName, apartmentName, condition)

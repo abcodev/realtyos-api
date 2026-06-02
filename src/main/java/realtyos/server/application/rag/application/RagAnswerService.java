@@ -39,7 +39,8 @@ public class RagAnswerService {
             memoryService.record(userId, query, decision.condition());
             return new RagAnswer(
                     decisionService.formatAnswer(decision),
-                    DecisionAnswerSourceMapper.from(decision)
+                    DecisionAnswerSourceMapper.from(decision),
+                    decision
             );
         }
 

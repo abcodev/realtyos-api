@@ -3,7 +3,7 @@ package realtyos.server.application.realestate.application.service;
 import org.springframework.stereotype.Service;
 import realtyos.server.application.rag.domain.RagSearchCondition;
 import realtyos.server.application.realestate.domain.DecisionCandidate;
-import realtyos.server.application.realestate.domain.DecisionDealSample;
+import realtyos.server.application.realestate.domain.DecisionScoreBreakdown;
 
 import java.time.LocalDate;
 import java.time.temporal.ChronoUnit;
@@ -65,6 +65,12 @@ public class DecisionScoreService {
                 candidate.dealCount(),
                 candidate.averagePricePerPyeong(),
                 Math.round(score * 10.0) / 10.0,
+                new DecisionScoreBreakdown(
+                        roundScore(budgetScore),
+                        roundScore(areaScore),
+                        roundScore(liquidityScore),
+                        roundScore(recencyScore)
+                ),
                 strengths,
                 cautions,
                 candidate.samples()
@@ -117,5 +123,9 @@ public class DecisionScoreService {
 
     private double clamp(double value) {
         return Math.max(0, Math.min(100, value));
+    }
+
+    private double roundScore(double value) {
+        return Math.round(value * 10.0) / 10.0;
     }
 }

@@ -17,6 +17,7 @@ public record DecisionCandidate(
         Long dealCount,
         Long averagePricePerPyeong,
         double score,
+        DecisionScoreBreakdown scoreBreakdown,
         List<String> strengths,
         List<String> cautions,
         List<DecisionDealSample> samples

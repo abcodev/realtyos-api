@@ -51,6 +51,7 @@ public class RagAnswerStreamingService {
             send(eventConsumer, "completed", Map.of(
                     "answer", answer,
                     "sourceCount", sources.size(),
+                    "decision", decision,
                     "sources", sources
             ));
             return;
