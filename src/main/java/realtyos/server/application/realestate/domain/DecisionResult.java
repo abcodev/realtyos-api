@@ -8,6 +8,7 @@ public record DecisionResult(
         String query,
         RagSearchCondition condition,
         String summary,
+        List<String> comparisonTargets,
         List<DecisionCandidate> candidates
 ) {
 }

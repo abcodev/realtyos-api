@@ -12,44 +12,10 @@ import java.time.LocalDate;
 import java.time.YearMonth;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Map;
 
 @Service
 @RequiredArgsConstructor
 public class DealAnalysisService {
-
-    private static final Map<String, String> REGION_CODE_ALIASES = Map.ofEntries(
-            Map.entry("서울", "11"),
-            Map.entry("서울시", "11"),
-            Map.entry("서울특별시", "11"),
-            Map.entry("강남구", "11680"),
-            Map.entry("강남", "11680"),
-            Map.entry("서초구", "11650"),
-            Map.entry("서초", "11650"),
-            Map.entry("송파구", "11710"),
-            Map.entry("송파", "11710"),
-            Map.entry("마포구", "11440"),
-            Map.entry("마포", "11440"),
-            Map.entry("용산구", "11170"),
-            Map.entry("용산", "11170"),
-            Map.entry("성동구", "11200"),
-            Map.entry("성동", "11200"),
-            Map.entry("영등포구", "11560"),
-            Map.entry("영등포", "11560"),
-            Map.entry("양천구", "11470"),
-            Map.entry("목동", "11470")
-    );
-    private static final Map<String, String> DONG_ALIASES = Map.ofEntries(
-            Map.entry("대치동", "대치동"),
-            Map.entry("대치", "대치동"),
-            Map.entry("잠실동", "잠실동"),
-            Map.entry("잠실", "잠실동"),
-            Map.entry("반포동", "반포동"),
-            Map.entry("반포", "반포동"),
-            Map.entry("압구정동", "압구정동"),
-            Map.entry("압구정", "압구정동"),
-            Map.entry("목동", "목동")
-    );
 
     private final JdbcTemplate jdbcTemplate;
 
@@ -252,24 +218,22 @@ public class DealAnalysisService {
             return;
         }
         String normalizedRegion = region.trim();
-        String regionCode = REGION_CODE_ALIASES.get(normalizedRegion);
-        if (regionCode != null) {
-            if (regionCode.length() == 2) {
-                sql.append(" AND d.sgg_code LIKE ? ");
-                args.add(regionCode + "%");
-            } else {
-                sql.append(" AND d.sgg_code = ? ");
-                args.add(regionCode);
-            }
-            return;
-        }
-        String dongName = DONG_ALIASES.get(normalizedRegion);
-        if (dongName != null) {
+        if (isDongLevelRegion(normalizedRegion)) {
             sql.append(" AND d.umd_name ILIKE ? ");
-            args.add(like(dongName));
+            args.add(like(normalizedRegion));
             return;
         }
-        sql.append(" AND (d.umd_name ILIKE ? OR d.sgg_code ILIKE ?) ");
+        sql.append("""
+                 AND (
+                    d.umd_name ILIKE ?
+                    OR d.sgg_code IN (
+                        SELECT DISTINCT substring(b.bgd_code, 1, 5)
+                        FROM real_estate_bgd_code b
+                        WHERE b.bgd_name ILIKE ?
+                        AND b.bgd_code NOT LIKE '__00000000'
+                    )
+                 )
+                """);
         String value = like(normalizedRegion);
         args.add(value);
         args.add(value);
@@ -305,5 +269,9 @@ public class DealAnalysisService {
 
     private boolean hasText(String value) {
         return value != null && !value.isBlank();
+    }
+
+    private boolean isDongLevelRegion(String value) {
+        return value.endsWith("동") || value.endsWith("읍") || value.endsWith("면") || value.endsWith("리");
     }
 }

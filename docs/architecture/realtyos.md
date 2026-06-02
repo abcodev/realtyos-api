@@ -215,7 +215,7 @@ ai:
     default-provider: OPENAI
     default-model: gpt-4o-mini
     local-provider: OLLAMA
-    local-model: qwen3:8b
+    local-model: qwen3:8bd
     high-quality-provider: OPENAI
     high-quality-model: gpt-4o-mini
     fallback-provider: OPENAI

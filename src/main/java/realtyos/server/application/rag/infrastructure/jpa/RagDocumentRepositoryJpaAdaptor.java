@@ -19,7 +19,6 @@ import java.time.LocalDate;
 import java.time.YearMonth;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Map;
 import org.springframework.jdbc.core.BatchPreparedStatementSetter;
 
 @Repository
@@ -27,38 +26,6 @@ import org.springframework.jdbc.core.BatchPreparedStatementSetter;
 public class RagDocumentRepositoryJpaAdaptor implements RagDocumentRepository {
 
     private static final String DEAL_SOURCE_TYPE = "DEAL";
-    private static final Map<String, String> REGION_CODE_ALIASES = Map.ofEntries(
-            Map.entry("강남구", "11680"),
-            Map.entry("강남", "11680"),
-            Map.entry("서초구", "11650"),
-            Map.entry("서초", "11650"),
-            Map.entry("송파구", "11710"),
-            Map.entry("송파", "11710"),
-            Map.entry("마포구", "11440"),
-            Map.entry("마포", "11440"),
-            Map.entry("용산구", "11170"),
-            Map.entry("용산", "11170"),
-            Map.entry("성동구", "11200"),
-            Map.entry("성동", "11200"),
-            Map.entry("영등포구", "11560"),
-            Map.entry("영등포", "11560"),
-            Map.entry("양천구", "11470"),
-            Map.entry("목동", "11470"),
-            Map.entry("분당구", "41135"),
-            Map.entry("분당", "41135"),
-            Map.entry("판교", "41135")
-    );
-    private static final Map<String, String> DONG_ALIASES = Map.ofEntries(
-            Map.entry("대치동", "대치동"),
-            Map.entry("대치", "대치동"),
-            Map.entry("잠실동", "잠실동"),
-            Map.entry("잠실", "잠실동"),
-            Map.entry("반포동", "반포동"),
-            Map.entry("반포", "반포동"),
-            Map.entry("압구정동", "압구정동"),
-            Map.entry("압구정", "압구정동"),
-            Map.entry("목동", "목동")
-    );
 
     private final JdbcTemplate jdbcTemplate;
 
@@ -571,30 +538,48 @@ public class RagDocumentRepositoryJpaAdaptor implements RagDocumentRepository {
 
     private void appendActualRegionFilter(StringBuilder sql, List<Object> args, String region, boolean includeDocumentRegion) {
         String normalizedRegion = region.trim();
-        String regionCode = REGION_CODE_ALIASES.get(normalizedRegion);
-        if (regionCode != null) {
-            sql.append(" AND d.sgg_code = ? ");
-            args.add(regionCode);
-            return;
-        }
-        String dongName = DONG_ALIASES.get(normalizedRegion);
-        if (dongName != null) {
+        if (isDongLevelRegion(normalizedRegion)) {
             sql.append(" AND d.umd_name ILIKE ? ");
-            args.add(like(dongName));
+            args.add(like(normalizedRegion));
             return;
         }
 
         if (includeDocumentRegion) {
-            sql.append(" AND (rd.region ILIKE ? OR d.umd_name ILIKE ? OR d.sgg_code ILIKE ?) ");
+            sql.append("""
+                     AND (
+                        rd.region ILIKE ?
+                        OR d.umd_name ILIKE ?
+                        OR d.sgg_code ILIKE ?
+                        OR d.sgg_code IN (
+                            SELECT DISTINCT substring(b.bgd_code, 1, 5)
+                            FROM real_estate_bgd_code b
+                            WHERE b.bgd_name ILIKE ?
+                            AND b.bgd_code NOT LIKE '__00000000'
+                        )
+                     )
+                    """);
             String value = like(normalizedRegion);
+            args.add(value);
             args.add(value);
             args.add(value);
             args.add(value);
             return;
         }
 
-        sql.append(" AND (d.umd_name ILIKE ? OR d.sgg_code ILIKE ?) ");
+        sql.append("""
+                 AND (
+                    d.umd_name ILIKE ?
+                    OR d.sgg_code ILIKE ?
+                    OR d.sgg_code IN (
+                        SELECT DISTINCT substring(b.bgd_code, 1, 5)
+                        FROM real_estate_bgd_code b
+                        WHERE b.bgd_name ILIKE ?
+                        AND b.bgd_code NOT LIKE '__00000000'
+                    )
+                 )
+                """);
         String value = like(normalizedRegion);
+        args.add(value);
         args.add(value);
         args.add(value);
     }
@@ -617,5 +602,9 @@ public class RagDocumentRepositoryJpaAdaptor implements RagDocumentRepository {
     private Long getNullableLong(java.sql.ResultSet rs, String columnName) throws java.sql.SQLException {
         long value = rs.getLong(columnName);
         return rs.wasNull() ? null : value;
+    }
+
+    private boolean isDongLevelRegion(String value) {
+        return value.endsWith("동") || value.endsWith("읍") || value.endsWith("면") || value.endsWith("리");
     }
 }

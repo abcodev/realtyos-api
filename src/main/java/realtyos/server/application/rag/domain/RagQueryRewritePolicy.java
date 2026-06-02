@@ -3,7 +3,6 @@ package realtyos.server.application.rag.domain;
 import java.time.Year;
 import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -15,50 +14,9 @@ public class RagQueryRewritePolicy {
     private static final Pattern PYEONG_RANGE_PATTERN = Pattern.compile("(\\d+(?:\\.\\d+)?)\\s*평\\s*대");
     private static final Pattern PYEONG_PATTERN = Pattern.compile("(\\d+(?:\\.\\d+)?)\\s*평(?:형)?");
     private static final Pattern YEAR_MONTH_PATTERN = Pattern.compile("(20\\d{2})\\s*년(?:\\s*(\\d{1,2})\\s*월)?");
+    private static final Pattern ADMIN_REGION_PATTERN = Pattern.compile("([가-힣]{2,}(?:구|동|읍|면|리))");
+    private static final Pattern LEADING_REGION_PATTERN = Pattern.compile("^([가-힣]{2,10})(?:\\s|$)");
     private static final double SQUARE_METERS_PER_PYEONG = 3.305785;
-
-    private static final List<String> REGION_KEYWORDS = List.of(
-            "강남구", "강남",
-            "서초구", "서초",
-            "송파구", "송파",
-            "마포구", "마포",
-            "용산구", "용산",
-            "성동구", "성동",
-            "영등포구", "영등포",
-            "분당구", "분당",
-            "판교",
-            "잠실동", "잠실",
-            "반포",
-            "압구정",
-            "대치동", "대치",
-            "목동"
-    );
-    private static final Map<String, String> REGION_CANONICAL_NAMES = Map.ofEntries(
-            Map.entry("강남구", "강남구"),
-            Map.entry("강남", "강남구"),
-            Map.entry("서초구", "서초구"),
-            Map.entry("서초", "서초구"),
-            Map.entry("송파구", "송파구"),
-            Map.entry("송파", "송파구"),
-            Map.entry("마포구", "마포구"),
-            Map.entry("마포", "마포구"),
-            Map.entry("용산구", "용산구"),
-            Map.entry("용산", "용산구"),
-            Map.entry("성동구", "성동구"),
-            Map.entry("성동", "성동구"),
-            Map.entry("영등포구", "영등포구"),
-            Map.entry("영등포", "영등포구"),
-            Map.entry("분당구", "분당구"),
-            Map.entry("분당", "분당구"),
-            Map.entry("판교", "판교"),
-            Map.entry("잠실동", "잠실동"),
-            Map.entry("잠실", "잠실동"),
-            Map.entry("반포", "반포동"),
-            Map.entry("압구정", "압구정동"),
-            Map.entry("대치동", "대치동"),
-            Map.entry("대치", "대치동"),
-            Map.entry("목동", "목동")
-    );
 
     public RagQueryRewriteResult rewrite(String query, RagSearchCondition explicitCondition) {
         RagSearchCondition inferred = infer(query);
@@ -72,9 +30,11 @@ public class RagQueryRewritePolicy {
             return List.of();
         }
         LinkedHashMap<String, String> regions = new LinkedHashMap<>();
-        REGION_KEYWORDS.stream()
-                .filter(text::contains)
-                .forEach(keyword -> regions.putIfAbsent(canonicalRegion(keyword), canonicalRegion(keyword)));
+        Matcher matcher = ADMIN_REGION_PATTERN.matcher(text);
+        while (matcher.find()) {
+            String region = matcher.group(1);
+            regions.putIfAbsent(region, region);
+        }
         return regions.size() > 1 ? List.copyOf(regions.values()) : List.of();
     }
 
@@ -138,17 +98,43 @@ public class RagQueryRewritePolicy {
     }
 
     private String inferRegion(String text) {
-        List<String> matchedRegions = REGION_KEYWORDS.stream()
-                .filter(text::contains)
-                .toList();
-        if (matchedRegions.size() > 1 && containsAny(text, "비교", "차이", "대비", " vs ", "VS", "와", "과", "랑", "하고")) {
+        LinkedHashMap<String, String> matchedRegions = new LinkedHashMap<>();
+        findAdministrativeRegions(text).forEach(region -> matchedRegions.putIfAbsent(region, region));
+        if (!matchedRegions.isEmpty() && isComparisonQuery(text)) {
             return null;
         }
-        return matchedRegions.stream().findFirst().orElse(null);
+        if (!matchedRegions.isEmpty()) {
+            return matchedRegions.values().stream().findFirst().orElse(null);
+        }
+        return inferLeadingRegion(text);
     }
 
-    private String canonicalRegion(String region) {
-        return REGION_CANONICAL_NAMES.getOrDefault(region, region);
+    private List<String> findAdministrativeRegions(String text) {
+        List<String> regions = new java.util.ArrayList<>();
+        Matcher matcher = ADMIN_REGION_PATTERN.matcher(text);
+        while (matcher.find()) {
+            regions.add(matcher.group(1));
+        }
+        return regions;
+    }
+
+    private boolean isComparisonQuery(String text) {
+        return containsAny(text, "비교", "차이", "대비", " vs ", "VS", "와", "과", "랑", "하고");
+    }
+
+    private String inferLeadingRegion(String text) {
+        if (!containsAny(text, "시세", "최근", "거래", "흐름", "아파트", "어때", "어떤가")) {
+            return null;
+        }
+        Matcher matcher = LEADING_REGION_PATTERN.matcher(text);
+        if (!matcher.find()) {
+            return null;
+        }
+        String candidate = matcher.group(1);
+        if (containsAny(candidate, "최근", "거래", "아파트", "시세")) {
+            return null;
+        }
+        return candidate;
     }
 
     private PriceRange inferPriceRange(String text) {

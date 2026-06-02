@@ -15,7 +15,7 @@ import java.util.UUID;
 public class OAuthCodeRedisAdaptor implements OAuthCodeRepository {
 
     private static final String KEY_PREFIX = "auth:oauth-code:";
-    private static final Duration TTL = Duration.ofSeconds(30);
+    private static final Duration TTL = Duration.ofMinutes(3);
     private static final String DELIMITER = "||";
 
     private final StringRedisTemplate redisTemplate;

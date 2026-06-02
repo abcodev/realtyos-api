@@ -70,4 +70,18 @@ class RagQueryRewritePolicyTest {
         assertThat(result.condition().maxArea()).isNull();
         assertThat(result.condition().maxPrice()).isEqualTo(40000L);
     }
+
+    @Test
+    void infersGaepoDongRegion() {
+        RagQueryRewriteResult result = policy.rewrite("개포동 시세 어때", null);
+
+        assertThat(result.condition().region()).isEqualTo("개포동");
+    }
+
+    @Test
+    void infersAdministrativeRegionWithoutHardcodedAlias() {
+        RagQueryRewriteResult result = policy.rewrite("월영동 시세 어때", null);
+
+        assertThat(result.condition().region()).isEqualTo("월영동");
+    }
 }
