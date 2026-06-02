@@ -7,6 +7,7 @@ import realtyos.server.application.rag.domain.RagSearchCondition;
 import realtyos.server.application.realestate.domain.DecisionCandidate;
 import realtyos.server.application.realestate.domain.DecisionDealSample;
 import realtyos.server.application.realestate.domain.DecisionResult;
+import realtyos.server.application.realestate.domain.DecisionTargetSummary;
 
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -70,6 +71,7 @@ public class RealestateDecisionService {
                 resolvedCondition,
                 buildSummary(candidates, comparisonTargets),
                 comparisonTargets.stream().map(ComparisonTarget::value).toList(),
+                buildTargetSummaries(candidates, comparisonTargets),
                 candidates
         );
     }
@@ -185,6 +187,7 @@ public class RealestateDecisionService {
 
         StringBuilder answer = new StringBuilder();
         answer.append(result.summary()).append("\n\n");
+        appendSummaryTable(answer, result.targetSummaries());
         answer.append("| 순위 | 후보 | 점수 | 최근 거래 | 평균가 | 평당가 | 거래건수 |\n");
         answer.append("|---:|---|---:|---|---:|---:|---:|\n");
         for (int i = 0; i < Math.min(5, result.candidates().size()); i++) {
@@ -230,13 +233,14 @@ public class RealestateDecisionService {
     private String formatComparisonAnswer(DecisionResult result) {
         StringBuilder answer = new StringBuilder();
         answer.append(result.summary()).append("\n\n");
-        answer.append("| 비교대상 | 대표 후보 | 최고점 | 평균가 | 평당가 | 거래건수 |\n");
-        answer.append("|---|---|---:|---:|---:|---:|\n");
+        answer.append("| 비교대상 | 대표 후보 | 최고점 | 최근가 | 평균가 | 중위가 | 평당가 | 거래건수 | 3개월 변화 |\n");
+        answer.append("|---|---|---:|---:|---:|---:|---:|---:|---:|\n");
 
         for (String target : result.comparisonTargets()) {
             List<DecisionCandidate> targetCandidates = candidatesForTarget(result.candidates(), target);
+            DecisionTargetSummary summary = summaryForTarget(result.targetSummaries(), target);
             if (targetCandidates.isEmpty()) {
-                answer.append("| ").append(target).append(" | 근거 없음 | - | - | - | 0 |\n");
+                answer.append("| ").append(target).append(" | 근거 없음 | - | - | - | - | - | 0 | - |\n");
                 continue;
             }
             DecisionCandidate best = targetCandidates.getFirst();
@@ -247,11 +251,17 @@ public class RealestateDecisionService {
                     .append(" | ")
                     .append(best.score())
                     .append(" | ")
+                    .append(formatPrice(summary == null ? best.latestDealAmount() : summary.latestDealAmount()))
+                    .append(" | ")
                     .append(formatPrice(best.averageDealAmount()))
+                    .append(" | ")
+                    .append(formatPrice(summary == null ? null : summary.medianDealAmount()))
                     .append(" | ")
                     .append(formatPrice(best.averagePricePerPyeong()))
                     .append(" | ")
-                    .append(best.dealCount() == null ? 0 : best.dealCount())
+                    .append(summary == null ? best.dealCount() == null ? 0 : best.dealCount() : summary.dealCount())
+                    .append(" | ")
+                    .append(formatPercent(summary == null ? null : summary.threeMonthChangeRate()))
                     .append(" |\n");
         }
 
@@ -311,6 +321,136 @@ public class RealestateDecisionService {
                             || target.contains(apartmentName);
                 })
                 .toList();
+    }
+
+    private List<DecisionTargetSummary> buildTargetSummaries(
+            List<DecisionCandidate> candidates,
+            List<ComparisonTarget> comparisonTargets
+    ) {
+        if (comparisonTargets.size() > 1) {
+            return comparisonTargets.stream()
+                    .map(target -> buildTargetSummary(target.value(), candidatesForTarget(candidates, target.value())))
+                    .toList();
+        }
+        return List.of(buildTargetSummary("추천 후보", candidates));
+    }
+
+    private DecisionTargetSummary buildTargetSummary(String name, List<DecisionCandidate> candidates) {
+        if (candidates == null || candidates.isEmpty()) {
+            return new DecisionTargetSummary(name, 0, 0L, null, null, null, null, null, null, null, null);
+        }
+
+        List<Long> averagePrices = candidates.stream()
+                .map(DecisionCandidate::averageDealAmount)
+                .filter(value -> value != null)
+                .sorted()
+                .toList();
+        DecisionCandidate latest = candidates.stream()
+                .filter(candidate -> candidate.latestDealDate() != null)
+                .max(Comparator.comparing(DecisionCandidate::latestDealDate))
+                .orElse(candidates.getFirst());
+
+        return new DecisionTargetSummary(
+                name,
+                candidates.size(),
+                candidates.stream()
+                        .map(DecisionCandidate::dealCount)
+                        .filter(value -> value != null)
+                        .mapToLong(Long::longValue)
+                        .sum(),
+                latest.latestDealDate(),
+                latest.latestDealAmount(),
+                averageLong(averagePrices),
+                medianLong(averagePrices),
+                candidates.stream()
+                        .map(DecisionCandidate::minDealAmount)
+                        .filter(value -> value != null)
+                        .min(Long::compareTo)
+                        .orElse(null),
+                candidates.stream()
+                        .map(DecisionCandidate::maxDealAmount)
+                        .filter(value -> value != null)
+                        .max(Long::compareTo)
+                        .orElse(null),
+                averageLong(candidates.stream()
+                        .map(DecisionCandidate::averagePricePerPyeong)
+                        .filter(value -> value != null)
+                        .toList()),
+                estimateRecentChangeRate(candidates)
+        );
+    }
+
+    private void appendSummaryTable(StringBuilder answer, List<DecisionTargetSummary> summaries) {
+        if (summaries == null || summaries.isEmpty()) {
+            return;
+        }
+        answer.append("| 구분 | 최근가 | 평균가 | 중위가 | 최저/최고 | 평당가 | 거래건수 | 3개월 변화 |\n");
+        answer.append("|---|---:|---:|---:|---:|---:|---:|---:|\n");
+        for (DecisionTargetSummary summary : summaries) {
+            answer.append("| ")
+                    .append(summary.name())
+                    .append(" | ")
+                    .append(formatPrice(summary.latestDealAmount()))
+                    .append(" | ")
+                    .append(formatPrice(summary.averageDealAmount()))
+                    .append(" | ")
+                    .append(formatPrice(summary.medianDealAmount()))
+                    .append(" | ")
+                    .append(formatPrice(summary.minDealAmount())).append("~").append(formatPrice(summary.maxDealAmount()))
+                    .append(" | ")
+                    .append(formatPrice(summary.averagePricePerPyeong()))
+                    .append(" | ")
+                    .append(summary.dealCount() == null ? 0 : summary.dealCount())
+                    .append(" | ")
+                    .append(formatPercent(summary.threeMonthChangeRate()))
+                    .append(" |\n");
+        }
+        answer.append("\n");
+    }
+
+    private DecisionTargetSummary summaryForTarget(List<DecisionTargetSummary> summaries, String target) {
+        if (summaries == null) {
+            return null;
+        }
+        return summaries.stream()
+                .filter(summary -> summary.name().equals(target))
+                .findFirst()
+                .orElse(null);
+    }
+
+    private Long averageLong(List<Long> values) {
+        if (values == null || values.isEmpty()) {
+            return null;
+        }
+        return Math.round(values.stream().mapToLong(Long::longValue).average().orElse(0));
+    }
+
+    private Long medianLong(List<Long> sortedValues) {
+        if (sortedValues == null || sortedValues.isEmpty()) {
+            return null;
+        }
+        int middle = sortedValues.size() / 2;
+        if (sortedValues.size() % 2 == 1) {
+            return sortedValues.get(middle);
+        }
+        return Math.round((sortedValues.get(middle - 1) + sortedValues.get(middle)) / 2.0);
+    }
+
+    private Double estimateRecentChangeRate(List<DecisionCandidate> candidates) {
+        List<DecisionDealSample> samples = candidates.stream()
+                .flatMap(candidate -> candidate.samples().stream())
+                .filter(sample -> sample.dealDate() != null && sample.dealAmount() != null)
+                .sorted(Comparator.comparing(DecisionDealSample::dealDate))
+                .toList();
+        if (samples.size() < 2) {
+            return null;
+        }
+        DecisionDealSample oldest = samples.getFirst();
+        DecisionDealSample latest = samples.getLast();
+        if (oldest.dealAmount() == null || oldest.dealAmount() == 0 || latest.dealAmount() == null) {
+            return null;
+        }
+        return Math.round(((latest.dealAmount() - oldest.dealAmount()) * 1000.0 / oldest.dealAmount())) / 10.0;
     }
 
     private String buildSummary(List<DecisionCandidate> candidates, List<ComparisonTarget> comparisonTargets) {
@@ -443,6 +583,13 @@ public class RealestateDecisionService {
             return eok + "억원";
         }
         return price + "만원";
+    }
+
+    private String formatPercent(Double value) {
+        if (value == null) {
+            return "정보없음";
+        }
+        return "%.1f%%".formatted(value);
     }
 
     private String safe(String value) {

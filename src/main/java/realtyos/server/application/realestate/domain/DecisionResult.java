@@ -9,6 +9,7 @@ public record DecisionResult(
         RagSearchCondition condition,
         String summary,
         List<String> comparisonTargets,
+        List<DecisionTargetSummary> targetSummaries,
         List<DecisionCandidate> candidates
 ) {
 }

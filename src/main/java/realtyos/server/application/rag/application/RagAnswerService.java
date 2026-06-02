@@ -36,10 +36,12 @@ public class RagAnswerService {
 
         if (decisionService.supports(query)) {
             DecisionResult decision = decisionService.decide(query, topK, personalizedCondition);
-            memoryService.record(userId, query, decision.condition());
+            List<RagAnswerSource> sources = DecisionAnswerSourceMapper.from(decision);
+            String answer = decisionService.formatAnswer(decision);
+            memoryService.record(userId, query, decision.condition(), answer, sources, decision, "DECISION_ENGINE");
             return new RagAnswer(
-                    decisionService.formatAnswer(decision),
-                    DecisionAnswerSourceMapper.from(decision),
+                    answer,
+                    sources,
                     decision
             );
         }
@@ -52,25 +54,37 @@ public class RagAnswerService {
                 personalizedCondition
         );
         if (!guardrail.hasUsableEvidence(personalizedCondition, searchResults)) {
-            memoryService.record(userId, query, personalizedCondition);
-            return new RagAnswer(guardrail.noMatchingEvidenceMessage(), List.of());
+            String answer = guardrail.noMatchingEvidenceMessage();
+            memoryService.record(userId, query, personalizedCondition, answer, List.of(), null, "SYSTEM");
+            return new RagAnswer(answer, List.of());
         }
 
         List<RagAnswerSource> sources = searchResults.stream()
                 .map(RagAnswerSource::from)
                 .toList();
         if (guardrail.shouldUseEvidenceSummary(query)) {
-            memoryService.record(userId, query, personalizedCondition);
-            return new RagAnswer(guardrail.buildEvidenceSummary(searchResults), sources);
+            String answer = guardrail.buildEvidenceSummary(searchResults);
+            memoryService.record(userId, query, personalizedCondition, answer, sources, null, "SYSTEM");
+            return new RagAnswer(answer, sources);
         }
 
         String prompt = promptBuilder.build(query, searchResults, memory.map(UserAiMemory::toPromptContext).orElse(null));
         String answer = aiGateway.askRouted(ENTITY_TYPE, prompt, answerProvider, answerModel);
         answer = guardrail.finalizeAnswer(answer, searchResults);
 
-        memoryService.record(userId, query, personalizedCondition);
+        memoryService.record(userId, query, personalizedCondition, answer, sources, null, modelName(answerProvider, answerModel));
         log.info("RAG answer completed - query: {}, sourceCount: {}", query, sources.size());
         return new RagAnswer(answer, sources);
+    }
+
+    private String modelName(String provider, String model) {
+        if (provider == null || provider.isBlank()) {
+            return model == null || model.isBlank() ? null : model;
+        }
+        if (model == null || model.isBlank()) {
+            return provider;
+        }
+        return provider + ":" + model;
     }
 
 }

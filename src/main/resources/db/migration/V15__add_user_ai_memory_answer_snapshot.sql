@@ -1,0 +1,5 @@
+ALTER TABLE user_ai_memory_event
+    ADD COLUMN IF NOT EXISTS answer TEXT,
+    ADD COLUMN IF NOT EXISTS sources_json TEXT,
+    ADD COLUMN IF NOT EXISTS decision_json TEXT,
+    ADD COLUMN IF NOT EXISTS model VARCHAR(255);

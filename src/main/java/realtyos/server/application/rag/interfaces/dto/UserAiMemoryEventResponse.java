@@ -3,6 +3,7 @@ package realtyos.server.application.rag.interfaces.dto;
 import realtyos.server.application.rag.domain.UserAiMemoryEvent;
 
 import java.time.LocalDateTime;
+import java.util.List;
 
 public record UserAiMemoryEventResponse(
         Long id,
@@ -11,6 +12,10 @@ public record UserAiMemoryEventResponse(
         String apartmentName,
         Long minPrice,
         Long maxPrice,
+        String answer,
+        List<RagAnswerSourceResponse> sources,
+        RagDecisionResponse decision,
+        String model,
         LocalDateTime createdAt
 ) {
 
@@ -22,6 +27,12 @@ public record UserAiMemoryEventResponse(
                 event.apartmentName(),
                 event.minPrice(),
                 event.maxPrice(),
+                event.answer(),
+                event.sources().stream()
+                        .map(RagAnswerSourceResponse::from)
+                        .toList(),
+                RagDecisionResponse.from(event.decision()),
+                event.model(),
                 event.createdAt()
         );
     }

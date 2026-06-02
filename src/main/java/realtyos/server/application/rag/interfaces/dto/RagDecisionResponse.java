@@ -4,6 +4,7 @@ import realtyos.server.application.realestate.domain.DecisionCandidate;
 import realtyos.server.application.realestate.domain.DecisionDealSample;
 import realtyos.server.application.realestate.domain.DecisionResult;
 import realtyos.server.application.realestate.domain.DecisionScoreBreakdown;
+import realtyos.server.application.realestate.domain.DecisionTargetSummary;
 
 import java.util.List;
 
@@ -11,6 +12,7 @@ public record RagDecisionResponse(
         String type,
         String summary,
         String winner,
+        List<RagDecisionTargetSummaryResponse> targetSummaries,
         List<RagDecisionTargetResponse> targets
 ) {
     public static RagDecisionResponse from(DecisionResult result) {
@@ -31,6 +33,9 @@ public record RagDecisionResponse(
                         .findFirst()
                         .map(RagDecisionTargetResponse::name)
                         .orElse(null),
+                (result.targetSummaries() == null ? List.<DecisionTargetSummary>of() : result.targetSummaries()).stream()
+                        .map(RagDecisionTargetSummaryResponse::from)
+                        .toList(),
                 targets
         );
     }
@@ -95,6 +100,36 @@ public record RagDecisionResponse(
                     .mapToLong(Long::longValue)
                     .average()
                     .orElse(0));
+        }
+    }
+
+    public record RagDecisionTargetSummaryResponse(
+            String name,
+            int candidateCount,
+            Long dealCount,
+            String latestDealDate,
+            Long latestDealAmount,
+            Long averageDealAmount,
+            Long medianDealAmount,
+            Long minDealAmount,
+            Long maxDealAmount,
+            Long averagePricePerPyeong,
+            Double threeMonthChangeRate
+    ) {
+        private static RagDecisionTargetSummaryResponse from(DecisionTargetSummary summary) {
+            return new RagDecisionTargetSummaryResponse(
+                    summary.name(),
+                    summary.candidateCount(),
+                    summary.dealCount(),
+                    summary.latestDealDate(),
+                    summary.latestDealAmount(),
+                    summary.averageDealAmount(),
+                    summary.medianDealAmount(),
+                    summary.minDealAmount(),
+                    summary.maxDealAmount(),
+                    summary.averagePricePerPyeong(),
+                    summary.threeMonthChangeRate()
+            );
         }
     }
 

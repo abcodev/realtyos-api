@@ -44,7 +44,7 @@ public class RagAnswerStreamingService {
             DecisionResult decision = decisionService.decide(query, topK, personalizedCondition);
             List<RagAnswerSource> sources = DecisionAnswerSourceMapper.from(decision);
             String answer = decisionService.formatAnswer(decision);
-            memoryService.record(userId, query, decision.condition());
+            memoryService.record(userId, query, decision.condition(), answer, sources, decision, "DECISION_ENGINE");
             send(eventConsumer, "retrieval_started", Map.of("query", query));
             send(eventConsumer, "retrieval_completed", Map.of("sourceCount", sources.size()));
             send(eventConsumer, "token", Map.of("text", answer));
@@ -68,8 +68,8 @@ public class RagAnswerStreamingService {
         send(eventConsumer, "retrieval_completed", Map.of("sourceCount", searchResults.size()));
 
         if (!guardrail.hasUsableEvidence(personalizedCondition, searchResults)) {
-            memoryService.record(userId, query, personalizedCondition);
             String answer = guardrail.noMatchingEvidenceMessage();
+            memoryService.record(userId, query, personalizedCondition, answer, List.of(), null, "SYSTEM");
             send(eventConsumer, "token", Map.of("text", answer));
             send(eventConsumer, "completed", Map.of(
                     "answer", answer,
@@ -82,8 +82,8 @@ public class RagAnswerStreamingService {
                 .map(RagAnswerSource::from)
                 .toList();
         if (guardrail.shouldUseEvidenceSummary(query)) {
-            memoryService.record(userId, query, personalizedCondition);
             String answer = guardrail.buildEvidenceSummary(searchResults);
+            memoryService.record(userId, query, personalizedCondition, answer, sources, null, "SYSTEM");
             send(eventConsumer, "token", Map.of("text", answer));
             send(eventConsumer, "completed", Map.of(
                     "answer", answer,
@@ -107,7 +107,7 @@ public class RagAnswerStreamingService {
             send(eventConsumer, "token", Map.of("text", chunk));
         });
 
-        memoryService.record(userId, query, personalizedCondition);
+        memoryService.record(userId, query, personalizedCondition, answer.toString(), sources, null, modelName(route.provider(), route.model()));
         send(eventConsumer, "completed", Map.of(
                 "answer", answer.toString(),
                 "sourceCount", sources.size(),
@@ -117,5 +117,15 @@ public class RagAnswerStreamingService {
 
     private void send(Consumer<RagStreamEvent> eventConsumer, String eventName, Object data) {
         eventConsumer.accept(new RagStreamEvent(eventName, data));
+    }
+
+    private String modelName(String provider, String model) {
+        if (provider == null || provider.isBlank()) {
+            return model == null || model.isBlank() ? null : model;
+        }
+        if (model == null || model.isBlank()) {
+            return provider;
+        }
+        return provider + ":" + model;
     }
 }

@@ -4,10 +4,12 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import realtyos.server.application.rag.domain.RagQueryRewritePolicy;
+import realtyos.server.application.rag.domain.RagAnswerSource;
 import realtyos.server.application.rag.domain.RagSearchCondition;
 import realtyos.server.application.rag.domain.UserAiMemory;
 import realtyos.server.application.rag.domain.UserAiMemoryEvent;
 import realtyos.server.application.rag.domain.UserAiMemoryRepository;
+import realtyos.server.application.realestate.domain.DecisionResult;
 
 import java.util.Comparator;
 import java.util.List;
@@ -41,11 +43,24 @@ public class UserAiMemoryService {
 
     @Transactional
     public void record(Long userId, String query, RagSearchCondition condition) {
+        record(userId, query, condition, null, List.of(), null, null);
+    }
+
+    @Transactional
+    public void record(
+            Long userId,
+            String query,
+            RagSearchCondition condition,
+            String answer,
+            List<RagAnswerSource> sources,
+            DecisionResult decision,
+            String model
+    ) {
         if (userId == null) {
             return;
         }
         RagSearchCondition inferredCondition = queryRewritePolicy.rewrite(query, condition).condition();
-        repository.saveEvent(UserAiMemoryEvent.create(userId, query, inferredCondition));
+        repository.saveEvent(UserAiMemoryEvent.create(userId, query, inferredCondition, answer, sources, decision, model));
         String frequentRegion = findFrequentRegion(userId).orElse(inferredCondition.region());
         UserAiMemory current = repository.findByUserId(userId)
                 .orElseGet(() -> UserAiMemory.empty(userId));
