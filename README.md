@@ -4,6 +4,8 @@
 
 사용자는 “개포동 시세 어때”, “대치동과 역삼동 비교해줘”, “마포에서 갈아타기 후보를 찾아줘”처럼 자연어로 질문합니다. RealtyOS는 실거래 데이터를 검색 가능한 문서와 임베딩으로 변환하고, 질문 의도에 따라 RAG 검색 또는 실거래 기반 의사결정 엔진으로 라우팅해 답변과 근거 거래를 함께 제공합니다.
 
+<img width="3688" height="2645" alt="image" src="https://github.com/user-attachments/assets/5658ba46-ae95-4c2c-b3e1-25279171d6cd" />
+
 ---
 
 ## Project Summary
